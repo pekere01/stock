@@ -2047,8 +2047,6 @@ async function bootstrapAuth() {
   });
 }
 
-const STORAGE_KEY = 'stok-dashboard-products';
-const CATEGORIES_KEY = 'stok-dashboard-categories';
 const EUR_RATE_KEY = 'stok-dashboard-eur-rate';
 
 const CATEGORY_PALETTE = [
@@ -2063,75 +2061,59 @@ let editingId = null;
 let pendingConfirm = null;
 let eurRate = parseFloat(localStorage.getItem(EUR_RATE_KEY)) || 34.00;
 
-/* ===== SUPABASE DATA SYNC ===== */
-let saveTimer = null;
-
-function saveProducts()   { _scheduleSave(); }
-function saveCategories() { _scheduleSave(); }
-
-function _scheduleSave() {
-  // Her zaman localStorage'a anlık yedek al
-  localStorage.setItem(STORAGE_KEY,    JSON.stringify(products));
-  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(_flushSave, 900);
+/* ===== DB HELPERS ===== */
+function dbToProduct(row) {
+  return {
+    id:           row.id,
+    name:         row.name,
+    barcode:      row.barcode || '',
+    category:     row.category,
+    cost:         parseFloat(row.cost_price)  || 0,
+    price:        parseFloat(row.sale_price)  || 0,
+    stock:        row.stock        || 0,
+    minStock:     row.min_stock    || 0,
+    sales7d:      row.sales7d      || 0,
+    status:       row.status       || 'active',
+    depo:         row.warehouse_info || '',
+    purchaseRate: row.purchase_rate || null,
+    saleRate:     row.sale_rate    || null,
+    createdAt:    row.created_at
+  };
 }
 
-async function _flushSave() {
-  if (!currentUser) return;
-  try {
-    const { error } = await sb.from('user_data').upsert(
-      { user_id: currentUser.id, products, categories, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' }
-    );
-    if (error) throw error;
-  } catch (err) {
-    console.error('Supabase kayıt hatası:', err.message || err);
-  }
+function productToDb(p) {
+  return {
+    name:          p.name,
+    barcode:       p.barcode   || null,
+    category:      p.category,
+    cost_price:    p.cost      || 0,
+    sale_price:    p.price     || 0,
+    stock:         p.stock     || 0,
+    min_stock:     p.minStock  || 0,
+    sales7d:       p.sales7d   || 0,
+    status:        p.status    || 'active',
+    warehouse_info: p.depo     || null,
+    purchase_rate: p.purchaseRate || null,
+    sale_rate:     p.saleRate  || null
+  };
 }
 
 async function loadData() {
   if (!currentUser) return;
   try {
-    const { data, error } = await sb
-      .from('user_data')
-      .select('products, categories')
-      .eq('user_id', currentUser.id);
-    if (error) throw error;
-
-    const row = data && data[0];
-    if (row) {
-      products   = Array.isArray(row.products)   ? row.products   : [];
-      categories = Array.isArray(row.categories) ? row.categories.filter(c => c?.name) : [];
-      // eski format: sku → barcode
-      let migrated = false;
-      products.forEach(p => {
-        if (p.sku !== undefined && p.barcode === undefined) {
-          p.barcode = p.sku; delete p.sku; migrated = true;
-        }
-      });
-      if (migrated) _scheduleSave();
-    } else {
-      // Kullanıcının ilk girişi — localStorage'da veri varsa buluta taşı
-      let lsProds = [], lsCats = [];
-      try { lsProds = JSON.parse(localStorage.getItem(STORAGE_KEY)    || '[]'); } catch { lsProds = []; }
-      try {
-        const r = JSON.parse(localStorage.getItem(CATEGORIES_KEY) || '[]');
-        lsCats = Array.isArray(r) ? r.filter(c => c?.name) : [];
-      } catch { lsCats = []; }
-      products   = Array.isArray(lsProds) ? lsProds : [];
-      categories = lsCats;
-      await _flushSave();
-      if (products.length || categories.length) toast('Veriler buluta aktarıldı ✓');
-    }
+    const [prodsRes, catsRes] = await Promise.all([
+      sb.from('products').select('*').order('created_at', { ascending: true }),
+      sb.from('categories').select('*').order('name', { ascending: true })
+    ]);
+    if (prodsRes.error) throw prodsRes.error;
+    if (catsRes.error) throw catsRes.error;
+    products   = (prodsRes.data || []).map(dbToProduct);
+    categories = (catsRes.data  || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
   } catch (err) {
-    console.error('Supabase yükleme hatası:', err.message || err);
-    // Supabase erişilemiyorsa localStorage yedekten yükle
-    try { products   = JSON.parse(localStorage.getItem(STORAGE_KEY)    || '[]'); } catch { products = []; }
-    try {
-      const r = JSON.parse(localStorage.getItem(CATEGORIES_KEY) || '[]');
-      categories = Array.isArray(r) ? r.filter(c => c?.name) : [];
-    } catch { categories = []; }
+    console.error('Veri yükleme hatası:', err.message || err);
+    toast('Veriler yüklenemedi: ' + (err.message || err), 'error');
+    products   = [];
+    categories = [];
   }
 }
 function getCategoryColor(name) {
@@ -2163,9 +2145,6 @@ function calcStatus(p) {
 }
 function statusLabel(s) {
   return { active: 'Aktif', low_stock: 'Düşük', out_of_stock: 'Tükendi' }[s] || s;
-}
-function nextId() {
-  return products.length ? Math.max(...products.map(p => p.id)) + 1 : 1;
 }
 
 /* ===== ANIMATED COUNTER ===== */
@@ -2519,64 +2498,73 @@ function openEditModal(id) {
 function closeProductModal() { document.getElementById('product-modal').classList.remove('visible'); }
 function closeProductModalOnOverlay(e) { if (e.target.id === 'product-modal') closeProductModal(); }
 
-function submitProductForm(e) {
+async function submitProductForm(e) {
   e.preventDefault();
-  const name = document.getElementById('f-name').value.trim();
-  const barcode = document.getElementById('f-barcode').value.trim();
+  const name     = document.getElementById('f-name').value.trim();
+  const barcode  = document.getElementById('f-barcode').value.trim();
   const category = document.getElementById('f-category').value;
-  const stock = parseInt(document.getElementById('f-stock').value);
+  const stock    = parseInt(document.getElementById('f-stock').value);
   const minStock = parseInt(document.getElementById('f-minStock').value) || 0;
-  const cost = parseFloat(document.getElementById('f-cost').value) || 0;
-  const price = parseFloat(document.getElementById('f-price').value) || 0;
-  const depo = document.getElementById('f-depo').value.trim();
-  const errEl = document.getElementById('form-error');
+  const cost     = parseFloat(document.getElementById('f-cost').value) || 0;
+  const price    = parseFloat(document.getElementById('f-price').value) || 0;
+  const depo     = document.getElementById('f-depo').value.trim();
+  const errEl    = document.getElementById('form-error');
+  const saveBtn  = e.target.querySelector('button[type="submit"]');
   errEl.textContent = '';
 
   if (!name || !category) { errEl.textContent = 'Ürün adı ve kategori zorunludur.'; return; }
-  if (!depo) { errEl.textContent = 'Depo bilgisi zorunludur.'; return; }
+  if (!depo)  { errEl.textContent = 'Depo bilgisi zorunludur.'; return; }
   if (isNaN(stock)) { errEl.textContent = 'Stok adedi geçerli olmalı.'; return; }
   if (stock < 0 || minStock < 0) { errEl.textContent = 'Negatif değer giremezsiniz.'; return; }
   if (price > 0 && cost > 0 && price < cost) { errEl.textContent = 'Satış fiyatı alış fiyatından düşük olamaz.'; return; }
 
-  // Duplicate kontrolü: barkod veya ürün adı eşleşmesi
-  const barcodeMatch = barcode ? products.find(p => (p.barcode || '').toLowerCase() === barcode.toLowerCase() && p.id !== editingId) : null;
-  const nameMatch = !barcodeMatch ? products.find(p => p.name.toLowerCase() === name.toLowerCase() && p.id !== editingId) : null;
-  const dup = barcodeMatch || nameMatch;
-  const dupReason = barcodeMatch ? 'barkod' : 'ürün adı';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor…'; }
+  try {
+    const barcodeMatch = barcode ? products.find(p => (p.barcode || '').toLowerCase() === barcode.toLowerCase() && p.id !== editingId) : null;
+    const nameMatch    = !barcodeMatch ? products.find(p => p.name.toLowerCase() === name.toLowerCase() && p.id !== editingId) : null;
+    const dup = barcodeMatch || nameMatch;
+    const dupReason = barcodeMatch ? 'barkod' : 'ürün adı';
 
-  if (dup && !editingId) {
-    // Mevcut ürün bulundu → stok artır
-    dup.stock += stock;
-    if (cost > 0) dup.cost = cost;
-    if (depo) dup.depo = depo;
-    dup.purchaseRate = eurRate;
-    dup.status = calcStatus(dup);
-    saveProducts();
-    closeProductModal();
-    renderAll();
-    toast(`"${dup.name}" — stok ${stock} adet artırıldı (${dupReason} eşleşti)`);
-    return;
-  }
-  if (dup && editingId) { errEl.textContent = `Bu ${dupReason} zaten kullanımda: ${dup.name}`; return; }
+    if (dup && !editingId) {
+      const newStock  = dup.stock + stock;
+      const newStatus = calcStatus({ ...dup, stock: newStock });
+      const upd = { stock: newStock, status: newStatus, purchase_rate: eurRate };
+      if (cost > 0) upd.cost_price     = cost;
+      if (depo)     upd.warehouse_info = depo;
+      const { error } = await sb.from('products').update(upd).eq('id', dup.id);
+      if (error) throw error;
+      dup.stock = newStock; dup.status = newStatus;
+      if (cost > 0) dup.cost = cost;
+      if (depo)     dup.depo = depo;
+      dup.purchaseRate = eurRate;
+      closeProductModal(); renderAll();
+      toast(`"${dup.name}" — stok ${stock} adet artırıldı (${dupReason} eşleşti)`);
+      return;
+    }
+    if (dup && editingId) { errEl.textContent = `Bu ${dupReason} zaten kullanımda: ${dup.name}`; return; }
 
-  if (editingId) {
-    const p = products.find(x => x.id === editingId);
-    Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo });
-    p.status = calcStatus(p);
-    toast('Ürün güncellendi');
-  } else {
-    const newP = {
-      id: nextId(), name, barcode, category, depo, price: 0, cost, stock, minStock,
-      sales7d: 0, status: 'active', createdAt: Date.now(),
-      purchaseRate: eurRate
-    };
-    newP.status = calcStatus(newP);
-    products.push(newP);
-    toast('Ürün eklendi');
+    if (editingId) {
+      const p = products.find(x => x.id === editingId);
+      const dbRow = productToDb({ ...p, name, barcode, category, stock, minStock, cost, price, depo });
+      const { error } = await sb.from('products').update(dbRow).eq('id', editingId);
+      if (error) throw error;
+      Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo });
+      p.status = calcStatus(p);
+      toast('Ürün güncellendi');
+    } else {
+      const newPdata = { name, barcode, category, depo, cost, price: 0, stock, minStock, sales7d: 0, purchaseRate: eurRate };
+      newPdata.status = calcStatus({ stock, minStock });
+      const { data, error } = await sb.from('products').insert(productToDb(newPdata)).select().single();
+      if (error) throw error;
+      products.push(dbToProduct(data));
+      toast('Ürün eklendi');
+    }
+    closeProductModal(); renderAll();
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Kaydet'; }
   }
-  saveProducts();
-  closeProductModal();
-  renderAll();
 }
 
 /* ===== STOK ÇIKAR (SATIŞ) ===== */
@@ -2620,7 +2608,7 @@ function closeStockOutModal() {
 }
 function closeStockOutOnOverlay(e) { if (e.target.id === 'stockout-modal') closeStockOutModal(); }
 
-function submitStockOut(e) {
+async function submitStockOut(e) {
   e.preventDefault();
   const errEl = document.getElementById('stockout-error');
   errEl.textContent = '';
@@ -2632,24 +2620,34 @@ function submitStockOut(e) {
 
   const salePrice = parseFloat(document.getElementById('stockout-price').value) || 0;
   const saleRate  = parseFloat(document.getElementById('stockout-rate').value) || eurRate;
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
 
-  p.stock -= qty;
-  p.sales7d = (p.sales7d || 0) + qty;
-  if (salePrice > 0) {
-    p.price   = salePrice;
-    p.saleRate = saleRate;
+  try {
+    const newStock  = p.stock - qty;
+    const newSales7d = (p.sales7d || 0) + qty;
+    const newStatus = calcStatus({ ...p, stock: newStock });
+    const upd = { stock: newStock, sales7d: newSales7d, status: newStatus };
+    if (salePrice > 0) { upd.sale_price = salePrice; upd.sale_rate = saleRate; }
+
+    const { error } = await sb.from('products').update(upd).eq('id', p.id);
+    if (error) throw error;
+
+    p.stock = newStock; p.sales7d = newSales7d; p.status = newStatus;
+    if (salePrice > 0) { p.price = salePrice; p.saleRate = saleRate; }
+
+    const noteStr = salePrice > 0
+      ? `Satış fiyatı: ${fmtEUR(salePrice)} × ${saleRate.toFixed(2)} = ${fmtTL(salePrice * saleRate)}`
+      : '';
+    logAction('SATIŞ', p.name, p.barcode, qty, noteStr);
+
+    closeStockOutModal(); renderAll();
+    toast(`${qty} adet stoktan düşüldü`);
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
-  p.status = calcStatus(p);
-
-  const noteStr = salePrice > 0
-    ? `Satış fiyatı: ${fmtEUR(salePrice)} × ${saleRate.toFixed(2)} = ${fmtTL(salePrice * saleRate)}`
-    : '';
-  logAction('SATIŞ', p.name, p.barcode, qty, noteStr);
-
-  saveProducts();
-  closeStockOutModal();
-  renderAll();
-  toast(`${qty} adet stoktan düşüldü`);
 }
 
 /* ===== DELETE ===== */
@@ -2666,11 +2664,16 @@ function askDelete(id) {
     }
   });
 }
-function doDelete(id) {
-  products = products.filter(p => p.id !== id);
-  saveProducts();
-  renderAll();
-  toast('Ürün silindi');
+async function doDelete(id) {
+  try {
+    const { error } = await sb.from('products').delete().eq('id', id);
+    if (error) throw error;
+    products = products.filter(p => p.id !== id);
+    renderAll();
+    toast('Ürün silindi');
+  } catch (err) {
+    toast('Silme hatası: ' + (err.message || err), 'error');
+  }
 }
 
 /* ===== KATEGORI YÖNETIMI ===== */
@@ -2753,22 +2756,26 @@ function handleCategoryListBlur(e) {
   commitCategoryRename(cat.name, e.target.value);
 }
 
-function submitNewCategory(e) {
+async function submitNewCategory(e) {
   e.preventDefault();
   const errEl = document.getElementById('category-error');
   errEl.textContent = '';
   const name = document.getElementById('new-category-name').value.trim();
   if (!name) { errEl.textContent = 'Kategori adı boş olamaz.'; return; }
   if (categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
-    errEl.textContent = 'Bu isimde bir kategori zaten var.';
-    return;
+    errEl.textContent = 'Bu isimde bir kategori zaten var.'; return;
   }
-  categories.push({ name, color: pickNextColor() });
-  saveCategories();
-  document.getElementById('new-category-name').value = '';
-  renderCategoryList();
-  populateFilters();
-  toast('Kategori eklendi');
+  try {
+    const color = pickNextColor();
+    const { error } = await sb.from('categories').insert({ name, color });
+    if (error) throw error;
+    categories.push({ name, color });
+    document.getElementById('new-category-name').value = '';
+    renderCategoryList(); populateFilters();
+    toast('Kategori eklendi');
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  }
 }
 
 function startEditCategory(name) {
@@ -2777,28 +2784,32 @@ function startEditCategory(name) {
   renderCategoryList();
 }
 
-function commitCategoryRename(oldName, rawNew) {
+async function commitCategoryRename(oldName, rawNew) {
   const newName = (rawNew || '').trim();
   const errEl = document.getElementById('category-error');
   errEl.textContent = '';
   if (!newName) { errEl.textContent = 'Kategori adı boş olamaz.'; editingCategoryName = null; renderCategoryList(); return; }
   if (newName === oldName) { editingCategoryName = null; renderCategoryList(); return; }
   if (categories.some(c => c.name.toLowerCase() === newName.toLowerCase() && c.name !== oldName)) {
-    errEl.textContent = 'Bu isimde bir kategori zaten var.';
-    return;
+    errEl.textContent = 'Bu isimde bir kategori zaten var.'; return;
   }
-  const cat = categories.find(c => c.name === oldName);
-  if (!cat) return;
-  cat.name = newName;
-  // Ürünlerdeki kategori adını da güncelle
-  products.forEach(p => { if (p.category === oldName) p.category = newName; });
-  saveCategories();
-  saveProducts();
-  editingCategoryName = null;
-  renderCategoryList();
-  populateFilters();
-  renderAll();
-  toast('Kategori güncellendi');
+  try {
+    const { error: catErr } = await sb.from('categories').update({ name: newName }).eq('name', oldName);
+    if (catErr) throw catErr;
+    const affectedIds = products.filter(p => p.category === oldName).map(p => p.id);
+    if (affectedIds.length > 0) {
+      const { error: prodErr } = await sb.from('products').update({ category: newName }).eq('category', oldName);
+      if (prodErr) throw prodErr;
+      products.forEach(p => { if (p.category === oldName) p.category = newName; });
+    }
+    const cat = categories.find(c => c.name === oldName);
+    if (cat) cat.name = newName;
+    editingCategoryName = null;
+    renderCategoryList(); populateFilters(); renderAll();
+    toast('Kategori güncellendi');
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  }
 }
 
 function askDeleteCategory(name) {
@@ -2808,24 +2819,32 @@ function askDeleteCategory(name) {
       `Önce bu kategorideki ${count} ürünü başka kategoriye taşı veya sil.`;
     return;
   }
-  showConfirm(`"${name}" silinecek`, 'Bu kategori kalıcı olarak silinecek.', () => {
-    categories = categories.filter(c => c.name !== name);
-    saveCategories();
-    renderCategoryList();
-    populateFilters();
-    renderAll();
-    toast('Kategori silindi');
+  showConfirm(`"${name}" silinecek`, 'Bu kategori kalıcı olarak silinecek.', async () => {
+    try {
+      const { error } = await sb.from('categories').delete().eq('name', name);
+      if (error) throw error;
+      categories = categories.filter(c => c.name !== name);
+      renderCategoryList(); populateFilters(); renderAll();
+      toast('Kategori silindi');
+    } catch (err) {
+      toast('Hata: ' + (err.message || err), 'error');
+    }
   });
 }
 
-function cycleCategoryColor(name) {
+async function cycleCategoryColor(name) {
   const cat = categories.find(c => c.name === name);
   if (!cat) return;
   const idx = CATEGORY_PALETTE.indexOf(cat.color);
-  cat.color = CATEGORY_PALETTE[(idx + 1) % CATEGORY_PALETTE.length];
-  saveCategories();
-  renderCategoryList();
-  renderAll();
+  const newColor = CATEGORY_PALETTE[(idx + 1) % CATEGORY_PALETTE.length];
+  try {
+    const { error } = await sb.from('categories').update({ color: newColor }).eq('name', name);
+    if (error) throw error;
+    cat.color = newColor;
+    renderCategoryList(); renderAll();
+  } catch (err) {
+    toast('Hata: ' + (err.message || err), 'error');
+  }
 }
 
 function showConfirm(title, text, onConfirm) {
