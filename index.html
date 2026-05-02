@@ -2040,16 +2040,46 @@ function closePermModal() {
 }
 
 function askDeleteUser(userId, email) {
-  showConfirm(`"${email}" silinecek`, 'Kullanıcının yetki kaydı silinecek. Bu işlem geri alınamaz.', async () => {
-    try {
-      const { error } = await sb.from('user_permissions').delete().eq('user_id', userId);
-      if (error) throw error;
+  showConfirm(
+    `"${email}" kalıcı olarak silinecek`,
+    'Kullanıcı hem veritabanından hem Supabase Auth\'tan tamamen silinecek. Giriş yapamaz hale gelir. Bu işlem geri alınamaz.',
+    async () => {
+      let dbOk = false;
+      let authOk = false;
+      let dbErrMsg = '';
+      let authErrMsg = '';
+
+      // Aşama 1 — user_permissions tablosundan sil
+      try {
+        const { error } = await sb.from('user_permissions').delete().eq('user_id', userId);
+        if (error) dbErrMsg = error.message;
+        else dbOk = true;
+      } catch (e) { dbErrMsg = e.message || String(e); }
+
+      // Aşama 2 — Supabase Auth'tan sil (service role ile)
+      if (sbAdmin) {
+        try {
+          const { error } = await sbAdmin.auth.admin.deleteUser(userId);
+          if (error) authErrMsg = error.message;
+          else authOk = true;
+        } catch (e) { authErrMsg = e.message || String(e); }
+      } else {
+        authErrMsg = 'Service role key tanımlı değil';
+      }
+
       loadAdminUsers();
-      toast('Kullanıcı kaydı silindi');
-    } catch (err) {
-      toast('Hata: ' + (err.message || err), 'error');
+
+      if (dbOk && authOk) {
+        toast(`${email} tamamen silindi`);
+      } else if (dbOk && !authOk) {
+        toast(`DB silindi — Auth hatası: ${authErrMsg}`, 'error');
+      } else if (!dbOk && authOk) {
+        toast(`Auth silindi — DB hatası: ${dbErrMsg}`, 'error');
+      } else {
+        toast(`Silme başarısız — DB: ${dbErrMsg}`, 'error');
+      }
     }
-  });
+  );
 }
 
 /* ===== YENİ KULLANICI OLUŞTUR ===== */
