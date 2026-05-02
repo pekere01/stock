@@ -1468,20 +1468,20 @@
     <form id="product-form" onsubmit="submitProductForm(event)">
       <div class="form-grid">
         <div class="form-field full">
-          <label>Ürün Adı *</label>
-          <input type="text" id="f-name" required>
+          <label>Ürün Adı</label>
+          <input type="text" id="f-name">
         </div>
         <div class="form-field">
           <label>Barkod No</label>
           <input type="text" id="f-barcode">
         </div>
         <div class="form-field">
-          <label>Kategori *</label>
-          <select id="f-category" required></select>
+          <label>Kategori</label>
+          <select id="f-category"></select>
         </div>
         <div class="form-field">
-          <label>Stok Adedi *</label>
-          <input type="number" id="f-stock" min="0" step="1" required>
+          <label>Stok Adedi</label>
+          <input type="number" id="f-stock" min="0" step="1">
         </div>
         <div class="form-field">
           <label>Min. Stok Eşiği</label>
@@ -1492,8 +1492,8 @@
           <input type="number" id="f-cost" min="0" step="0.01" placeholder="0.00">
         </div>
         <div class="form-field">
-          <label>Depo Bilgisi *</label>
-          <input type="text" id="f-depo" placeholder="Ör: Ana Depo" required maxlength="60">
+          <label>Depo Bilgisi</label>
+          <input type="text" id="f-depo" placeholder="Ör: Ana Depo" maxlength="60">
         </div>
         <div class="form-field" id="price-field-wrapper">
           <label>Satış Fiyatı (€)</label>
@@ -2732,8 +2732,6 @@ async function submitProductForm(e) {
   const saveBtn  = e.target.querySelector('button[type="submit"]');
   errEl.textContent = '';
 
-  if (!name || !category) { errEl.textContent = 'Ürün adı ve kategori zorunludur.'; return; }
-  if (!depo)  { errEl.textContent = 'Depo bilgisi zorunludur.'; return; }
   if (isNaN(stock)) { errEl.textContent = 'Stok adedi geçerli olmalı.'; return; }
   if (stock < 0 || minStock < 0) { errEl.textContent = 'Negatif değer giremezsiniz.'; return; }
   if (price > 0 && cost > 0 && price < cost) { errEl.textContent = 'Satış fiyatı alış fiyatından düşük olamaz.'; return; }
