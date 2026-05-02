@@ -472,6 +472,8 @@
     overflow-x: auto;
     overflow-y: auto;
     max-height: 75vh;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }
   table {
     width: 100%;
@@ -506,6 +508,7 @@
     padding: 14px 16px;
     font-size: 13px;
     vertical-align: middle;
+    white-space: nowrap;
   }
   tbody td.center { text-align: center; }
 
@@ -884,15 +887,84 @@
   @media (max-width: 1024px) {
     .charts-grid { grid-template-columns: 1fr; }
   }
+
   @media (max-width: 768px) {
-    .stats-grid { grid-template-columns: 1fr 1fr; }
     .app-container { padding: 16px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+
+    /* Header: iç elemanlar sıkışınca alt satıra geçsin */
+    .header-actions {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* Filter bar: mobilde alt alta, tam genişlik */
+    .filter-bar {
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filter-bar .search-box {
+      max-width: 100%;
+      width: 100%;
+    }
+    .filter-bar select {
+      width: 100%;
+      min-width: unset;
+    }
+    .filter-bar-actions {
+      margin-left: 0;
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .filter-bar-actions .btn {
+      flex: 1;
+      min-width: 0;
+      justify-content: center;
+    }
+
+    /* Admin panel mobil */
+    .admin-panel { padding: 16px; }
+    .admin-panel-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .admin-tabs { flex-wrap: wrap; }
+    .admin-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .admin-table { min-width: 640px; }
   }
+
   @media (max-width: 480px) {
     .stats-grid { grid-template-columns: 1fr; }
-    .header-actions { width: 100%; }
-    .search-box { max-width: none; }
     .form-grid { grid-template-columns: 1fr; }
+
+    /* Header: tüm aksiyonlar tam genişlik */
+    .header-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+    .search-box { max-width: none; }
+
+    /* Brand'daki "· Dashboard" gizle — ekran kazanımı */
+    .brand-text span { display: none; }
+
+    /* EUR widget daha kompakt */
+    .eur-rate-date-label { display: none; }
+    .eur-rate-widget { padding: 6px 10px; }
+    .eur-rate-val { min-width: 36px; font-size: 12px; }
+
+    /* Kullanıcı e-postası kısalt */
+    .user-email { max-width: 100px; }
+
+    /* Toast alt ortalı */
+    .toast { left: 16px; right: 16px; bottom: 16px; }
+
+    /* Admin tab butonları küçülsün */
+    .admin-tab-btn { padding: 8px 12px; font-size: 12px; }
   }
 
   /* ==== ADMIN PANEL ==== */
