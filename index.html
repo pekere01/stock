@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg-primary: #0a0a0a;
@@ -318,11 +319,12 @@
     opacity: 0;
     transform: translateY(10px);
     animation: fadeUp 0.5s ease forwards;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
   }
-  .stat-card:nth-child(1) { animation-delay: 0.05s; }
-  .stat-card:nth-child(2) { animation-delay: 0.15s; }
-  .stat-card:nth-child(3) { animation-delay: 0.25s; }
-  .stat-card:nth-child(4) { animation-delay: 0.35s; }
+  .stat-card:nth-child(1) { animation-delay: 0.05s; border-left: 3px solid var(--accent); }
+  .stat-card:nth-child(2) { animation-delay: 0.15s; border-left: 3px solid var(--success); }
+  .stat-card:nth-child(3) { animation-delay: 0.25s; border-left: 3px solid var(--error); }
+  .stat-card:nth-child(4) { animation-delay: 0.35s; border-left: 3px solid var(--warning); }
 
   @keyframes fadeUp {
     to { opacity: 1; transform: translateY(0); }
@@ -355,9 +357,9 @@
   .stat-icon.amber { background: rgba(245,158,11,0.15); color: var(--warning); }
 
   .stat-value {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: -1px;
     margin-bottom: 4px;
   }
   .stat-trend {
@@ -381,6 +383,7 @@
     padding: 20px;
     opacity: 0;
     animation: fadeUp 0.5s ease 0.4s forwards;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
   }
   .chart-title {
     font-size: 15px;
@@ -502,8 +505,9 @@
   }
   tbody tr:last-child { border-bottom: none; }
   tbody tr:hover { background: var(--bg-table-hover); }
-  tbody tr.out_of_stock { background: rgba(239,68,68,0.05); }
-  tbody tr.out_of_stock:hover { background: rgba(239,68,68,0.1); }
+  tbody tr.out_of_stock { background: rgba(239,68,68,0.07); border-left: 3px solid rgba(239,68,68,0.5); }
+  tbody tr.out_of_stock:hover { background: rgba(239,68,68,0.12); }
+  tbody tr.low_stock { border-left: 3px solid rgba(245,158,11,0.5); }
   tbody td {
     padding: 14px 16px;
     font-size: 13px;
@@ -1154,6 +1158,121 @@
 
   /* SPA view isolation */
   #main-dashboard.hidden { display: none; }
+
+  /* ==== IMPORT MODAL ==== */
+  .import-modal { max-width: 740px; width: 95%; }
+  .import-drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 36px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 14px;
+  }
+  .import-drop-zone:hover, .import-drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(59,130,246,0.06);
+  }
+  .import-drop-icon { color: var(--text-secondary); margin-bottom: 10px; }
+  .import-drop-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .import-drop-sub { font-size: 12px; color: var(--text-secondary); }
+  .import-template-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-table-row);
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .import-summary-badges { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .import-badge { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .import-badge.imp-new    { background: rgba(34,197,94,0.12); color: var(--success); }
+  .import-badge.imp-update { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .import-badge.imp-total  { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .import-preview-wrap {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  .import-preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .import-preview-table th {
+    background: var(--bg-table-row);
+    padding: 8px 10px;
+    text-align: left;
+    color: var(--text-secondary);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .import-preview-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  .import-preview-table tr:last-child td { border-bottom: none; }
+  .import-result { text-align: center; padding: 20px 0 12px; }
+  .import-result-icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: rgba(34,197,94,0.12); color: var(--success);
+    font-size: 26px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+  }
+  .import-result-stats { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+  .import-result-stats b { color: var(--text-primary); font-size: 18px; }
+  .btn-sm { padding: 5px 11px; font-size: 12px; }
+
+  /* ==== SCAN MODAL ==== */
+  .scan-modal-content { max-width: 460px; width: 95%; }
+  .scan-input-wrap { position: relative; margin-bottom: 14px; }
+  .scan-barcode-input {
+    width: 100%; padding: 13px 16px 13px 46px; box-sizing: border-box;
+    background: var(--bg-primary); border: 2px solid var(--accent);
+    color: var(--text-primary); border-radius: 10px;
+    font-size: 16px; font-family: inherit; outline: none; letter-spacing: 0.5px;
+  }
+  .scan-barcode-input::placeholder { color: var(--text-secondary); font-size: 14px; }
+  .scan-input-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--accent); pointer-events: none; }
+  .scan-product-card {
+    background: var(--bg-table-row); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 14px; display: none;
+  }
+  .scan-product-card.visible { display: block; }
+  .scan-product-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .scan-product-meta { font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.6; }
+  .scan-qty-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .scan-qty-btn {
+    width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg-secondary); color: var(--text-primary);
+    font-size: 20px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+  }
+  .scan-qty-btn:hover { background: var(--bg-card); }
+  .scan-qty-val { font-size: 22px; font-weight: 700; min-width: 40px; text-align: center; }
+  .scan-actions { display: flex; gap: 10px; }
+  .scan-actions .btn { flex: 1; }
+  .scan-not-found { text-align: center; padding: 18px 0; color: var(--text-secondary); font-size: 14px; display: none; }
+  .scan-not-found.visible { display: block; }
+  .scan-log { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .scan-log-title { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600; }
+  .scan-log-list { display: flex; flex-direction: column; gap: 5px; max-height: 150px; overflow-y: auto; }
+  .scan-log-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: var(--bg-table-row); border-radius: 6px; font-size: 12px; }
+  .scan-log-item .log-name { font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px; }
+
+  /* ==== HISTORY MODAL ==== */
+  .history-modal-content { max-width: 900px; width: 95%; }
+  .history-filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .history-filters input, .history-filters select {
+    background: var(--bg-primary); border: 1px solid var(--border);
+    color: var(--text-primary); padding: 8px 12px; border-radius: 8px;
+    font-size: 13px; font-family: inherit;
+  }
+  .history-filters input:focus, .history-filters select:focus { outline: none; border-color: var(--accent); }
+  .history-table-wrap { max-height: 480px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -1308,13 +1427,6 @@
         <option value="low_stock">Düşük Stok</option>
         <option value="out_of_stock">Tükendi</option>
       </select>
-      <select id="filter-sort">
-        <option value="name-asc">Ada Göre (A-Z)</option>
-        <option value="price-asc">Fiyata Göre (Artan)</option>
-        <option value="price-desc">Fiyata Göre (Azalan)</option>
-        <option value="stock-desc">Stoka Göre (Azalan)</option>
-        <option value="sales-desc">Satışa Göre (Azalan)</option>
-      </select>
       <div class="filter-bar-actions">
         <button class="btn btn-primary" id="add-product-btn" onclick="openAddModal()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -1327,6 +1439,18 @@
         <button class="btn btn-secondary" onclick="exportCSV()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           CSV İndir
+        </button>
+        <button class="btn btn-secondary" id="import-btn" onclick="openImportModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          İçe Aktar
+        </button>
+        <button class="btn btn-secondary" id="history-btn" onclick="openHistoryModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Geçmiş
+        </button>
+        <button class="btn btn-secondary" id="scan-btn" onclick="openScanModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="4" width="2" height="16" rx="0.5"/><rect x="6" y="4" width="1" height="16" rx="0.5"/><rect x="9" y="4" width="3" height="16" rx="0.5"/><rect x="14" y="4" width="1" height="16" rx="0.5"/><rect x="17" y="4" width="2" height="16" rx="0.5"/><rect x="21" y="4" width="1" height="16" rx="0.5"/></svg>
+          Hızlı Tara
         </button>
       </div>
     </div>
@@ -1685,7 +1809,186 @@
   </div>
 </div>
 
+<!-- ===== IMPORT MODAL ===== -->
+<div class="modal-overlay" id="import-modal" onclick="closeImportOnOverlay(event)">
+  <div class="modal import-modal" onclick="event.stopPropagation()">
+
+    <!-- Step 1: Dosya Seç -->
+    <div id="import-step-1">
+      <div class="modal-header">
+        <div class="modal-title">CSV / Excel İçe Aktar</div>
+        <button class="modal-close" onclick="closeImportModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="import-drop-zone" id="import-drop-zone"
+           ondrop="handleImportFileDrop(event)"
+           ondragover="event.preventDefault(); this.classList.add('dragover')"
+           ondragleave="this.classList.remove('dragover')"
+           onclick="document.getElementById('import-file-input').click()">
+        <div class="import-drop-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="12" x2="12" y2="18"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
+        </div>
+        <div class="import-drop-title">Dosyayı sürükle bırak veya tıkla</div>
+        <div class="import-drop-sub">.xlsx, .xls veya .csv — Excel ve Google Sheets desteklenir</div>
+      </div>
+      <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFileSelect(event)">
+      <div class="import-template-note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        Sütun başlıkları otomatik algılanır. Sorun yaşarsanız şablonu kullanın:
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); downloadImportTemplate()">Şablon İndir</button>
+      </div>
+      <div class="form-error" id="import-error"></div>
+    </div>
+
+    <!-- Step 2: Önizleme -->
+    <div id="import-step-2" style="display:none">
+      <div class="modal-header">
+        <div class="modal-title">Önizleme &amp; Onay</div>
+        <button class="modal-close" onclick="closeImportModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="import-summary-badges">
+        <span class="import-badge imp-new"><b id="import-count-new">0</b> yeni ürün</span>
+        <span class="import-badge imp-update"><b id="import-count-update">0</b> stok güncellemesi</span>
+        <span class="import-badge imp-total"><b id="import-count-total">0</b> toplam satır</span>
+      </div>
+      <div class="import-preview-wrap">
+        <table class="import-preview-table">
+          <thead>
+            <tr>
+              <th>Ürün Adı</th>
+              <th>Barkod</th>
+              <th>Kategori</th>
+              <th style="text-align:right">Satış €</th>
+              <th style="text-align:right">Alış €</th>
+              <th style="text-align:right">Stok</th>
+              <th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody id="import-preview-body"></tbody>
+        </table>
+      </div>
+      <div class="form-error" id="import-error-2"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="goImportStep1()">← Geri</button>
+        <button class="btn btn-primary" id="import-confirm-btn" onclick="executeImport()">İçe Aktar</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Sonuç -->
+    <div id="import-step-3" style="display:none">
+      <div class="modal-header">
+        <div class="modal-title">İçe Aktarma Tamamlandı</div>
+        <button class="modal-close" onclick="closeImportModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="import-result">
+        <div class="import-result-icon">✓</div>
+        <div class="import-result-stats">
+          <div><b id="import-result-new">0</b> yeni ürün eklendi</div>
+          <div><b id="import-result-update">0</b> ürün güncellendi (stok eklendi)</div>
+          <div id="import-result-error-row"><b id="import-result-error">0</b> satır atlandı</div>
+        </div>
+      </div>
+      <div class="modal-actions" style="justify-content:center">
+        <button class="btn btn-primary" onclick="closeImportModal()">Tamam</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 </div><!-- /.app-root -->
+
+<!-- SCAN MODAL -->
+<div class="modal-overlay" id="scan-modal" onclick="closeScanOnOverlay(event)">
+  <div class="modal scan-modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Hızlı Tarama</h3>
+      <button class="modal-close" onclick="closeScanModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+
+    <div class="scan-input-wrap">
+      <svg class="scan-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="4" width="2" height="16" rx="0.5"/><rect x="6" y="4" width="1" height="16" rx="0.5"/><rect x="9" y="4" width="3" height="16" rx="0.5"/><rect x="14" y="4" width="1" height="16" rx="0.5"/><rect x="17" y="4" width="2" height="16" rx="0.5"/><rect x="21" y="4" width="1" height="16" rx="0.5"/></svg>
+      <input type="text" id="scan-barcode-input" class="scan-barcode-input"
+             placeholder="Barkod okutun veya yazıp Enter'a basın…"
+             onkeydown="handleScanKey(event)" autocomplete="off">
+    </div>
+
+    <div class="scan-product-card" id="scan-product-card">
+      <div class="scan-product-name" id="scan-product-name"></div>
+      <div class="scan-product-meta" id="scan-product-meta"></div>
+      <div class="scan-qty-row">
+        <button class="scan-qty-btn" onclick="changeScanQty(-1)">−</button>
+        <div class="scan-qty-val" id="scan-qty-val">1</div>
+        <button class="scan-qty-btn" onclick="changeScanQty(1)">+</button>
+        <span style="color:var(--text-secondary);font-size:13px">adet</span>
+      </div>
+      <div class="scan-actions">
+        <button class="btn btn-secondary" onclick="executeScan('in')">↑ Stok Ekle</button>
+        <button class="btn btn-primary" id="scan-sale-btn" onclick="executeScan('sale')">🛒 Satış</button>
+      </div>
+    </div>
+
+    <div class="scan-not-found" id="scan-not-found">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:8px;color:var(--warning)"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <div id="scan-not-found-msg">Ürün bulunamadı</div>
+    </div>
+
+    <div class="scan-log" id="scan-log" style="display:none">
+      <div class="scan-log-title">Son İşlemler</div>
+      <div class="scan-log-list" id="scan-log-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div class="modal-overlay" id="history-modal" onclick="closeHistoryOnOverlay(event)">
+  <div class="modal history-modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title" id="history-modal-title">Stok Hareket Geçmişi</h3>
+      <button class="modal-close" onclick="closeHistoryModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="history-filters">
+      <input type="text" id="history-filter-search" placeholder="Ürün adı ara…" oninput="renderHistory()" style="flex:1;min-width:160px">
+      <select id="history-filter-type" onchange="renderHistory()">
+        <option value="">Tüm İşlemler</option>
+        <option value="create">Ürün Oluşturuldu</option>
+        <option value="in">Stok Girişi</option>
+        <option value="sale">Satış</option>
+        <option value="out">Stok Çıkışı</option>
+        <option value="edit">Düzenlendi</option>
+        <option value="price_change">Fiyat Güncellendi</option>
+        <option value="import">İçe Aktarıldı</option>
+        <option value="delete">Silindi</option>
+      </select>
+    </div>
+    <div class="history-table-wrap">
+      <table class="data-table" style="font-size:13px">
+        <thead>
+          <tr>
+            <th style="white-space:nowrap">Tarih / Saat</th>
+            <th>Ürün</th>
+            <th>Kullanıcı</th>
+            <th>İşlem</th>
+            <th>Stok</th>
+            <th>Detay</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody">
+          <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary)">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <!-- Tooltip & Toast -->
 <div class="tooltip" id="tooltip"></div>
@@ -1710,10 +2013,11 @@ const PERM_DEFS = [
   { key: 'add_products',      label: 'Ürün Ekle/Düzenle',  desc: 'Yeni ürün ekleyebilir, mevcut ürünleri düzenleyebilir' },
   { key: 'make_sales',        label: 'Satış / Stok Çıkar', desc: 'Stoktan ürün düşebilir (satış yapabilir)' },
   { key: 'manage_categories', label: 'Kategori Yönetimi',  desc: 'Kategori ekleyebilir, silebilir, düzenleyebilir' },
+  { key: 'view_history',      label: 'Hareket Geçmişi',    desc: 'Stok hareket geçmişini görebilir' },
   { key: 'admin',             label: 'Yönetici',           desc: 'Kullanıcıları ve yetkileri yönetebilir, tüm işlemlere erişebilir' },
 ];
 
-const DEFAULT_PERMISSIONS = { view: true, add_products: false, make_sales: false, manage_categories: false, admin: false };
+const DEFAULT_PERMISSIONS = { view: true, add_products: false, make_sales: false, manage_categories: false, view_history: false, admin: false };
 
 let currentPermissions = null;
 
@@ -1778,10 +2082,16 @@ async function loadUserPermissions() {
 }
 
 function applyPermissions() {
-  const adminBtn = document.getElementById('admin-panel-btn');
-  const addBtn   = document.getElementById('add-product-btn');
-  if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
-  if (addBtn)   addBtn.style.display   = canDo('add_products') ? '' : 'none';
+  const adminBtn   = document.getElementById('admin-panel-btn');
+  const addBtn     = document.getElementById('add-product-btn');
+  const importBtn  = document.getElementById('import-btn');
+  const historyBtn = document.getElementById('history-btn');
+  const scanBtn    = document.getElementById('scan-btn');
+  if (adminBtn)   adminBtn.style.display   = isAdmin() ? '' : 'none';
+  if (addBtn)     addBtn.style.display     = canDo('add_products') ? '' : 'none';
+  if (importBtn)  importBtn.style.display  = canDo('add_products') ? '' : 'none';
+  if (historyBtn) historyBtn.style.display = canDo('view_history') ? '' : 'none';
+  if (scanBtn)    scanBtn.style.display    = (canDo('add_products') || canDo('make_sales')) ? '' : 'none';
 }
 
 /* ===== AUDIT LOG ===== */
@@ -2471,8 +2781,9 @@ function renderStats() {
     : 0;
 
   const viewOnly = isViewOnly();
+  const totalQty = products.reduce((s, p) => s + p.stock, 0);
   animateCounter(document.getElementById('stat-total'), total);
-  document.getElementById('stat-total-trend').textContent = `${total} çeşit ürün`;
+  document.getElementById('stat-total-trend').textContent = `${total} çeşit · ${totalQty.toLocaleString('tr-TR')} adet toplam`;
 
   if (viewOnly) {
     document.getElementById('stat-value').textContent = '—';
@@ -2483,8 +2794,12 @@ function renderStats() {
     document.getElementById('stat-value-trend').textContent = `TL eşd.: ${fmtTLShort(stockValueEUR * eurRate)} · Satış: ${fmtEURShort(stockRevenueEUR)}`;
   }
 
+  const outCount = products.filter(p => p.stock === 0).length;
+  const realLow  = lowCount - outCount;
   animateCounter(document.getElementById('stat-low'), lowCount);
-  document.getElementById('stat-low-trend').textContent = lowCount > 0 ? `${lowCount} ürün acil aksiyon gerekli` : 'Tüm stoklar yeterli';
+  document.getElementById('stat-low-trend').textContent = lowCount === 0
+    ? 'Tüm stoklar yeterli'
+    : [realLow > 0 ? `${realLow} düşük` : '', outCount > 0 ? `${outCount} tükendi` : ''].filter(Boolean).join(' · ');
 
   if (viewOnly) {
     document.getElementById('stat-margin').textContent = '—';
@@ -2661,22 +2976,12 @@ function getFiltered() {
   const search = (document.getElementById('search-input').value || '').toLowerCase().trim();
   const cat = document.getElementById('filter-category').value;
   const status = document.getElementById('filter-status').value;
-  const sort = document.getElementById('filter-sort').value;
-
   let list = products.slice();
   if (search) {
     list = list.filter(p => p.name.toLowerCase().includes(search) || (p.barcode || '').toLowerCase().includes(search));
   }
   if (cat) list = list.filter(p => p.category === cat);
   if (status) list = list.filter(p => calcStatus(p) === status);
-
-  const [k, dir] = sort.split('-');
-  const key = { name: 'name', price: 'price', stock: 'stock', sales: 'sales7d' }[k] || 'name';
-  list.sort((a, b) => {
-    const av = a[key], bv = b[key];
-    if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv, 'tr') : bv.localeCompare(av, 'tr');
-    return dir === 'asc' ? av - bv : bv - av;
-  });
   return list;
 }
 
@@ -2728,6 +3033,9 @@ function renderTable() {
             </button>` : ''}
             ${isAdmin() ? `<button class="icon-btn danger" title="Sil" onclick="askDelete(${p.id})">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+            </button>` : ''}
+            ${canDo('view_history') ? `<button class="icon-btn" title="Hareket Geçmişi" onclick="openHistoryModal(${p.id})" style="opacity:0.6">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             </button>` : ''}
           </div>
         </td>
@@ -2827,6 +3135,7 @@ async function submitProductForm(e) {
       if (cost > 0) dup.cost = cost;
       if (depo)     dup.depo = depo;
       dup.purchaseRate = eurRate;
+      logMovement({ productId: dup.id, productName: dup.name, type: 'in', quantity: stock, oldStock: newStock - stock, newStock });
       closeProductModal(); renderAll();
       toast(`"${dup.name}" — stok ${stock} adet artırıldı (${dupReason} eşleşti)`);
       return;
@@ -2835,11 +3144,15 @@ async function submitProductForm(e) {
 
     if (editingId) {
       const p = products.find(x => x.id === editingId);
+      const oldStock = p.stock, oldPrice = p.price, oldCost = p.cost;
       const dbRow = productToDb({ ...p, name, barcode, category, stock, minStock, cost, price, depo });
       const { error } = await sb.from('products').update(dbRow).eq('id', editingId);
       if (error) throw error;
       Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo });
       p.status = calcStatus(p);
+      const stockDelta = stock - oldStock;
+      const movType = stockDelta !== 0 ? (stockDelta > 0 ? 'in' : 'out') : (price !== oldPrice || cost !== oldCost ? 'price_change' : 'edit');
+      logMovement({ productId: editingId, productName: name, type: movType, quantity: Math.abs(stockDelta), oldStock, newStock: stock, oldPrice, newPrice: price, oldCost, newCost: cost });
       toast('Ürün güncellendi');
     } else {
       const newPdata = { name, barcode, category, depo, cost, price: 0, stock, minStock, sales7d: 0, purchaseRate: eurRate };
@@ -2847,6 +3160,7 @@ async function submitProductForm(e) {
       const { data, error } = await sb.from('products').insert(productToDb(newPdata)).select().single();
       if (error) throw error;
       products.push(dbToProduct(data));
+      logMovement({ productId: data.id, productName: name, type: 'create', quantity: stock, oldStock: 0, newStock: stock, newPrice: price, newCost: cost });
       toast('Ürün eklendi');
     }
     closeProductModal(); renderAll();
@@ -2936,6 +3250,7 @@ async function submitStockOut(e) {
       ? `Satış fiyatı: ${fmtEUR(salePrice)} × ${saleRate.toFixed(2)} = ${fmtTL(salePrice * saleRate)}`
       : '';
     logAction('SATIŞ', p.name, p.barcode, qty, noteStr);
+    logMovement({ productId: p.id, productName: p.name, type: 'sale', quantity: qty, oldStock: prevStock, newStock, notes: noteStr });
 
     closeStockOutModal(); renderAll();
     toast(`${qty} adet stoktan düşüldü`);
@@ -2990,9 +3305,11 @@ function askDelete(id) {
   });
 }
 async function doDelete(id) {
+  const pDel = products.find(p => p.id === id);
   try {
     const { error } = await sb.from('products').delete().eq('id', id);
     if (error) throw error;
+    if (pDel) logMovement({ productId: id, productName: pDel.name, type: 'delete', oldStock: pDel.stock, newStock: 0 });
     products = products.filter(p => p.id !== id);
     renderAll();
     toast('Ürün silindi');
@@ -3294,6 +3611,524 @@ async function fetchAndUpdateEurRate() {
   }
 }
 
+/* ===== CSV/EXCEL IMPORT ===== */
+let importRows = [];
+
+const IMPORT_COL_MAP = {
+  name:     ['ürün adı','urun adi','ad','ürün','urun','name','product name','product','adi'],
+  barcode:  ['barkod no','barkod','barcode','sku','stok kodu','kod'],
+  category: ['kategori','category','grup','group'],
+  depo:     ['depo','warehouse','raf','konum','location','depo/raf'],
+  price:    ['satış fiyatı','satis fiyati','fiyat','sale price','price','satış','satiş fiyati (€)','satış fiyatı (€)'],
+  cost:     ['alış fiyatı','alis fiyati','maliyet','cost','cost price','alış','alis fiyati (€)','alış fiyatı (€)'],
+  stock:    ['stok','stock','adet','miktar','quantity','mevcut stok'],
+  minStock: ['min. stok','min stok','minimum stok','min_stock','minstock','min stock','minimum','eşik'],
+  sales7d:  ['7g satış','7g satis','satış','sales','sales7d','haftalık satış','haftalik satis']
+};
+
+function openImportModal() {
+  if (!canDo('add_products')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
+  importRows = [];
+  document.getElementById('import-step-1').style.display = '';
+  document.getElementById('import-step-2').style.display = 'none';
+  document.getElementById('import-step-3').style.display = 'none';
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('import-error').textContent = '';
+  document.getElementById('import-modal').classList.add('visible');
+}
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('visible');
+  importRows = [];
+}
+function closeImportOnOverlay(e) { if (e.target.id === 'import-modal') closeImportModal(); }
+
+function goImportStep1() {
+  document.getElementById('import-step-2').style.display = 'none';
+  document.getElementById('import-step-1').style.display = '';
+  document.getElementById('import-error').textContent = '';
+  document.getElementById('import-file-input').value = '';
+}
+
+function downloadImportTemplate() {
+  const headers = ['Ürün Adı','Barkod No','Kategori','Depo','Satış Fiyatı (€)','Alış Fiyatı (€)','Stok','Min. Stok','7g Satış'];
+  const example = ['Örnek Ürün','BRK-001','Elektronik','A Rafı','29.99','15.00','50','10','5'];
+  const csv = [headers, example].map(row =>
+    row.map(c => /[",;\n]/.test(String(c)) ? `"${String(c).replace(/"/g,'""')}"` : String(c)).join(';')
+  ).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'stok-import-sablonu.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('Şablon indirildi');
+}
+
+function _normalizeHdr(h) {
+  return String(h).toLowerCase().trim().replace(/\s+/g,' ').replace(/[()€₺%*]/g,'').trim();
+}
+
+function _detectMapping(headers) {
+  const norm = headers.map(_normalizeHdr);
+  const map = {};
+  for (const [field, aliases] of Object.entries(IMPORT_COL_MAP)) {
+    for (let i = 0; i < norm.length; i++) {
+      if (aliases.includes(norm[i])) {
+        if (!(field in map)) { map[field] = i; break; }
+      }
+    }
+  }
+  return map;
+}
+
+function handleImportFileDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+}
+function handleImportFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processImportFile(file);
+}
+
+async function processImportFile(file) {
+  const errEl = document.getElementById('import-error');
+  errEl.textContent = '';
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls','csv'].includes(ext)) {
+    errEl.textContent = 'Sadece .xlsx, .xls veya .csv desteklenir.'; return;
+  }
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    if (raw.length < 2) { errEl.textContent = 'Dosya boş veya yalnızca başlık satırı var.'; return; }
+
+    const headers = raw[0].map(h => String(h));
+    const colMap  = _detectMapping(headers);
+
+    if (!('name' in colMap)) {
+      errEl.textContent = '"Ürün Adı" sütunu bulunamadı. Şablonu indirip doğru başlıklarla doldurun.';
+      return;
+    }
+
+    const get    = (row, field) => colMap[field] !== undefined ? String(row[colMap[field]] ?? '').trim() : '';
+    const getNum = (row, field) => { const v = get(row, field).replace(',', '.'); return parseFloat(v) || 0; };
+
+    const rows = raw.slice(1)
+      .filter(row => row.some(c => String(c).trim() !== ''))
+      .map(row => {
+        const name = get(row, 'name');
+        if (!name) return null;
+        return {
+          name,
+          barcode:  get(row, 'barcode'),
+          category: get(row, 'category') || 'Genel',
+          depo:     get(row, 'depo'),
+          price:    getNum(row, 'price'),
+          cost:     getNum(row, 'cost'),
+          stock:    Math.max(0, Math.round(getNum(row, 'stock'))),
+          minStock: Math.max(0, Math.round(getNum(row, 'minStock'))),
+          sales7d:  Math.max(0, Math.round(getNum(row, 'sales7d'))),
+        };
+      })
+      .filter(Boolean);
+
+    if (rows.length === 0) { errEl.textContent = 'Geçerli ürün satırı bulunamadı.'; return; }
+
+    importRows = rows;
+    renderImportPreview(rows);
+    document.getElementById('import-step-1').style.display = 'none';
+    document.getElementById('import-step-2').style.display = '';
+  } catch (err) {
+    errEl.textContent = 'Dosya okunamadı: ' + (err.message || err);
+  }
+}
+
+function _findExisting(row) {
+  if (row.barcode) {
+    const m = products.find(p => p.barcode && p.barcode.toLowerCase() === row.barcode.toLowerCase());
+    if (m) return m;
+  }
+  return products.find(p => p.name.toLowerCase() === row.name.toLowerCase()) || null;
+}
+
+function renderImportPreview(rows) {
+  let newCount = 0, updateCount = 0;
+  rows.forEach(r => { _findExisting(r) ? updateCount++ : newCount++; });
+
+  document.getElementById('import-count-new').textContent    = newCount;
+  document.getElementById('import-count-update').textContent = updateCount;
+  document.getElementById('import-count-total').textContent  = rows.length;
+
+  const tbody   = document.getElementById('import-preview-body');
+  const preview = rows.slice(0, 25);
+  tbody.innerHTML = preview.map(row => {
+    const existing = _findExisting(row);
+    const actionHtml = existing
+      ? `<span style="color:var(--warning);font-weight:500">+${row.stock} stok</span>`
+      : `<span style="color:var(--success);font-weight:500">Yeni</span>`;
+    return `<tr>
+      <td>${escapeHtml(row.name)}</td>
+      <td style="color:var(--text-secondary)">${escapeHtml(row.barcode || '—')}</td>
+      <td>${escapeHtml(row.category)}</td>
+      <td style="text-align:right">${row.price > 0 ? fmtEUR(row.price) : '—'}</td>
+      <td style="text-align:right">${row.cost > 0 ? fmtEUR(row.cost) : '—'}</td>
+      <td style="text-align:right;font-weight:600">${row.stock}</td>
+      <td>${actionHtml}</td>
+    </tr>`;
+  }).join('');
+  if (rows.length > 25) {
+    tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:12px 10px">… ve ${rows.length - 25} satır daha</td></tr>`;
+  }
+}
+
+async function executeImport() {
+  if (importRows.length === 0) return;
+  const btn   = document.getElementById('import-confirm-btn');
+  const errEl = document.getElementById('import-error-2');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'İçe Aktarılıyor…';
+
+  let newCount = 0, updateCount = 0, skipCount = 0;
+
+  try {
+    // 1. Auto-create missing categories
+    const neededCats = [...new Set(importRows.map(r => r.category).filter(Boolean))];
+    for (const catName of neededCats) {
+      if (!categories.some(c => c.name.toLowerCase() === catName.toLowerCase())) {
+        const color = pickNextColor();
+        const { error } = await sb.from('categories').insert({ name: catName, color });
+        if (!error) categories.push({ name: catName, color });
+      }
+    }
+
+    // 2. Separate into updates vs inserts (deduplicate inserts by barcode/name)
+    const toInsert = [];
+    const seenKeys = new Set(); // avoid double-insert within the file
+
+    for (const row of importRows) {
+      try {
+        const existing = _findExisting(row);
+        if (existing) {
+          const oldExStock = existing.stock;
+          const newStock  = existing.stock + row.stock;
+          const newStatus = calcStatus({ ...existing, stock: newStock });
+          const upd = { stock: newStock, status: newStatus };
+          if (row.cost > 0)  upd.cost_price     = row.cost;
+          if (row.price > 0) upd.sale_price      = row.price;
+          if (row.depo)      upd.warehouse_info  = row.depo;
+          const { error } = await sb.from('products').update(upd).eq('id', existing.id);
+          if (error) throw error;
+          existing.stock = newStock; existing.status = newStatus;
+          if (row.cost > 0)  existing.cost  = row.cost;
+          if (row.price > 0) existing.price = row.price;
+          if (row.depo)      existing.depo  = row.depo;
+          updateCount++;
+          logMovement({ productId: existing.id, productName: existing.name, type: 'import', quantity: row.stock, oldStock: oldExStock, newStock });
+        } else {
+          const key = (row.barcode || '').toLowerCase() || row.name.toLowerCase();
+          if (seenKeys.has(key)) {
+            // same product appears twice in the file — add stock to already-queued row
+            const queued = toInsert.find(r => (r.barcode?.toLowerCase() || r.name.toLowerCase()) === key);
+            if (queued) { queued.stock += row.stock; }
+          } else {
+            seenKeys.add(key);
+            toInsert.push({
+              name:          row.name,
+              barcode:       row.barcode || null,
+              category:      row.category,
+              cost_price:    row.cost,
+              sale_price:    row.price,
+              stock:         row.stock,
+              min_stock:     row.minStock,
+              sales7d:       row.sales7d,
+              status:        calcStatus({ stock: row.stock, minStock: row.minStock }),
+              warehouse_info: row.depo || null,
+              purchase_rate:  eurRate,
+            });
+          }
+        }
+      } catch (_) { skipCount++; }
+    }
+
+    // 3. Batch insert new products (50 per request)
+    const CHUNK = 50;
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const chunk = toInsert.slice(i, i + CHUNK);
+      const { data, error } = await sb.from('products').insert(chunk).select();
+      if (error) throw error;
+      const newProds = (data || []).map(dbToProduct);
+      products.push(...newProds);
+      newCount += chunk.length;
+      for (const np of newProds) {
+        logMovement({ productId: np.id, productName: np.name, type: 'import', quantity: np.stock, oldStock: 0, newStock: np.stock, newPrice: np.price, newCost: np.cost });
+      }
+    }
+
+    populateFilters();
+    renderAll();
+
+    document.getElementById('import-step-2').style.display = 'none';
+    document.getElementById('import-step-3').style.display = '';
+    document.getElementById('import-result-new').textContent    = newCount;
+    document.getElementById('import-result-update').textContent = updateCount;
+    document.getElementById('import-result-error').textContent  = skipCount;
+    const errRow = document.getElementById('import-result-error-row');
+    if (errRow) errRow.style.color = skipCount > 0 ? 'var(--error)' : 'var(--text-secondary)';
+
+  } catch (err) {
+    errEl.textContent = 'İçe aktarma hatası: ' + (err.message || err);
+  } finally {
+    btn.disabled = false; btn.textContent = 'İçe Aktar';
+  }
+}
+
+/* ===== HIZLI TARAMA ===== */
+let scanFoundProduct = null;
+let scanQty = 1;
+let scanLogItems = [];
+
+function openScanModal() {
+  if (!canDo('add_products') && !canDo('make_sales')) return;
+  scanFoundProduct = null;
+  scanQty = 1;
+  scanLogItems = [];
+  document.getElementById('scan-product-card').classList.remove('visible');
+  document.getElementById('scan-not-found').classList.remove('visible');
+  document.getElementById('scan-log').style.display = 'none';
+  document.getElementById('scan-barcode-input').value = '';
+  document.getElementById('scan-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('scan-barcode-input').focus(), 100);
+}
+function closeScanModal() {
+  document.getElementById('scan-modal').classList.remove('visible');
+  scanFoundProduct = null;
+  scanLogItems = [];
+}
+function closeScanOnOverlay(e) { if (e.target.id === 'scan-modal') closeScanModal(); }
+
+function handleScanKey(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const val = document.getElementById('scan-barcode-input').value.trim();
+  if (!val) return;
+
+  const found = products.find(p => p.barcode && p.barcode.toLowerCase() === val.toLowerCase())
+             || products.find(p => p.name.toLowerCase() === val.toLowerCase());
+
+  const cardEl = document.getElementById('scan-product-card');
+  const nfEl   = document.getElementById('scan-not-found');
+
+  if (found) {
+    scanFoundProduct = found;
+    scanQty = 1;
+    document.getElementById('scan-qty-val').textContent = '1';
+    document.getElementById('scan-product-name').textContent = found.name;
+    document.getElementById('scan-product-meta').textContent =
+      `Barkod: ${found.barcode || '—'}  •  Kategori: ${found.category}  •  Mevcut Stok: ${found.stock} adet`;
+    const saleBtn = document.getElementById('scan-sale-btn');
+    if (saleBtn) { saleBtn.disabled = found.stock <= 0; }
+    cardEl.classList.add('visible');
+    nfEl.classList.remove('visible');
+  } else {
+    scanFoundProduct = null;
+    document.getElementById('scan-not-found-msg').textContent = `"${val}" — ürün bulunamadı`;
+    nfEl.classList.add('visible');
+    cardEl.classList.remove('visible');
+  }
+}
+
+function changeScanQty(delta) {
+  scanQty = Math.max(1, scanQty + delta);
+  document.getElementById('scan-qty-val').textContent = scanQty;
+}
+
+async function executeScan(type) {
+  if (!scanFoundProduct) return;
+  const p = scanFoundProduct;
+  const qty = scanQty;
+
+  if (type === 'sale' && qty > p.stock) {
+    toast(`Yetersiz stok — maks ${p.stock} adet`, 'error');
+    return;
+  }
+
+  const newStock  = type === 'in' ? p.stock + qty : p.stock - qty;
+  const newStatus = calcStatus({ ...p, stock: newStock });
+
+  try {
+    const { error } = await sb.from('products').update({ stock: newStock, status: newStatus }).eq('id', p.id);
+    if (error) throw error;
+
+    const oldStock = p.stock;
+    p.stock  = newStock;
+    p.status = newStatus;
+
+    logMovement({ productId: p.id, productName: p.name, type, quantity: qty, oldStock, newStock });
+
+    const d = new Date();
+    const timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    scanLogItems.unshift({ name: p.name, type, qty, time: timeStr });
+    if (scanLogItems.length > 6) scanLogItems.pop();
+    renderScanLog();
+    renderAll();
+
+    document.getElementById('scan-barcode-input').value = '';
+    document.getElementById('scan-product-card').classList.remove('visible');
+    document.getElementById('scan-not-found').classList.remove('visible');
+    scanFoundProduct = null;
+    scanQty = 1;
+    document.getElementById('scan-barcode-input').focus();
+
+    toast(type === 'in' ? `+${qty} stok eklendi — ${p.name}` : `${qty} adet satıldı — ${p.name}`);
+  } catch (err) {
+    toast('Hata: ' + (err.message || err), 'error');
+  }
+}
+
+function renderScanLog() {
+  const logEl  = document.getElementById('scan-log');
+  const listEl = document.getElementById('scan-log-list');
+  if (scanLogItems.length === 0) { logEl.style.display = 'none'; return; }
+  logEl.style.display = '';
+  listEl.innerHTML = scanLogItems.map(item => {
+    const isIn  = item.type === 'in';
+    const color = isIn ? 'var(--success)' : 'var(--error)';
+    const label = isIn ? `+${item.qty} stok` : `−${item.qty} satış`;
+    return `<div class="scan-log-item">
+      <span class="log-name">${escapeHtml(item.name)}</span>
+      <span style="color:${color};font-weight:600;font-size:12px">${label}</span>
+      <span style="color:var(--text-secondary);font-size:11px;margin-left:8px">${item.time}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ===== STOK HAREKET GEÇMİŞİ ===== */
+async function logMovement({ productId, productName, type, quantity = 0, oldStock = null, newStock = null, oldPrice = null, newPrice = null, oldCost = null, newCost = null, notes = '' }) {
+  if (!currentUser) return;
+  try {
+    await sb.from('stock_movements').insert({
+      product_id:   productId || null,
+      product_name: productName,
+      user_id:      currentUser.id,
+      user_email:   currentUser.email,
+      type,
+      quantity,
+      old_stock:    oldStock,
+      new_stock:    newStock,
+      old_price:    oldPrice,
+      new_price:    newPrice,
+      old_cost:     oldCost,
+      new_cost:     newCost,
+      notes
+    });
+  } catch (e) {
+    console.warn('logMovement failed:', e);
+  }
+}
+
+let historyProductId = null;
+let historyRows = [];
+
+async function openHistoryModal(productId = null) {
+  if (!canDo('view_history')) return;
+  historyProductId = productId || null;
+  const titleEl = document.getElementById('history-modal-title');
+  if (historyProductId) {
+    const p = products.find(x => x.id === historyProductId);
+    if (titleEl && p) titleEl.textContent = `Hareket Geçmişi — ${p.name}`;
+  } else {
+    if (titleEl) titleEl.textContent = 'Stok Hareket Geçmişi';
+  }
+  document.getElementById('history-filter-type').value = '';
+  document.getElementById('history-filter-search').value = '';
+  document.getElementById('history-modal').classList.add('visible');
+  await loadHistory();
+}
+function closeHistoryModal() {
+  document.getElementById('history-modal').classList.remove('visible');
+  historyProductId = null;
+  historyRows = [];
+}
+function closeHistoryOnOverlay(e) { if (e.target.id === 'history-modal') closeHistoryModal(); }
+
+async function loadHistory() {
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary)">Yükleniyor…</td></tr>';
+  try {
+    let q = sb.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(200);
+    if (historyProductId) q = q.eq('product_id', historyProductId);
+    const { data, error } = await q;
+    if (error) throw error;
+    historyRows = data || [];
+    renderHistory();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error)">${escapeHtml(String(e.message || e))}</td></tr>`;
+  }
+}
+
+function renderHistory() {
+  const tbody = document.getElementById('history-tbody');
+  const typeFilter = document.getElementById('history-filter-type').value;
+  const searchQ    = document.getElementById('history-filter-search').value.toLowerCase().trim();
+
+  let rows = historyRows;
+  if (typeFilter) rows = rows.filter(r => r.type === typeFilter);
+  if (searchQ)    rows = rows.filter(r => (r.product_name || '').toLowerCase().includes(searchQ));
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary)">Hareket kaydı bulunamadı</td></tr>';
+    return;
+  }
+
+  const TYPE_META = {
+    create:       { label: 'Oluşturuldu',     color: 'var(--success)' },
+    delete:       { label: 'Silindi',          color: 'var(--error)' },
+    in:           { label: '↑ Stok Girişi',    color: 'var(--success)' },
+    out:          { label: '↓ Stok Çıkışı',    color: 'var(--error)' },
+    sale:         { label: '🛒 Satış',          color: '#f97316' },
+    edit:         { label: 'Düzenlendi',        color: 'var(--accent)' },
+    price_change: { label: 'Fiyat Değişti',     color: 'var(--warning)' },
+    import:       { label: '↑ İçe Aktarıldı',  color: '#8b5cf6' },
+  };
+
+  tbody.innerHTML = rows.map(r => {
+    const meta = TYPE_META[r.type] || { label: r.type, color: 'var(--text-secondary)' };
+    const d = new Date(r.created_at);
+    const dateStr = d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+    let stockHtml = '—';
+    if (r.old_stock !== null && r.new_stock !== null) {
+      const delta = r.new_stock - r.old_stock;
+      const sign = delta >= 0 ? '+' : '';
+      const col = delta >= 0 ? 'var(--success)' : 'var(--error)';
+      stockHtml = `<span style="color:${col};font-weight:600">${sign}${delta}</span> <span style="color:var(--text-secondary);font-size:11px">(${r.old_stock}→${r.new_stock})</span>`;
+    } else if (r.quantity) {
+      stockHtml = `<span style="color:var(--text-secondary)">${r.quantity} adet</span>`;
+    }
+
+    let detailHtml = escapeHtml(r.notes || '');
+    if (r.old_price !== null && r.new_price !== null && r.old_price !== r.new_price) {
+      detailHtml = `${fmtEUR(r.old_price)} → ${fmtEUR(r.new_price)}`;
+    } else if (!detailHtml && r.new_price) {
+      detailHtml = fmtEUR(r.new_price);
+    }
+
+    return `<tr>
+      <td style="white-space:nowrap;color:var(--text-secondary);font-size:11px">${dateStr}</td>
+      <td style="font-weight:500">${escapeHtml(r.product_name || '—')}</td>
+      <td style="font-size:11px;color:var(--text-secondary)">${escapeHtml(r.user_email || '—')}</td>
+      <td><span style="color:${meta.color};font-size:12px;font-weight:500">${meta.label}</span></td>
+      <td>${stockHtml}</td>
+      <td style="font-size:11px;color:var(--text-secondary);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${detailHtml || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
 /* ===== EVENT WIRING ===== */
 function init() {
   // EUR widget: önbellekteki değeri göster, gerçek veri enterApp'ta çekilir
@@ -3313,7 +4148,6 @@ function init() {
   catList.addEventListener('click', handleCategoryListClick);
   catList.addEventListener('keydown', handleCategoryListKeydown);
   catList.addEventListener('blur', handleCategoryListBlur, true);
-  document.getElementById('filter-sort').addEventListener('change', renderTable);
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
@@ -3322,6 +4156,9 @@ function init() {
       closeStockOutModal();
       closeCategoryModal();
       closePermModal();
+      closeImportModal();
+      closeHistoryModal();
+      closeScanModal();
     }
   });
 }
