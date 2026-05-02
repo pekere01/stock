@@ -34,11 +34,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Gmail SMTP transporter
+    // Gmail SMTP transporter (port 587 STARTTLS)
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false,
+      requireTLS: true,
       auth: {
         user: Deno.env.get("SMTP_USER"),
         pass: Deno.env.get("SMTP_APP_PASSWORD"),
