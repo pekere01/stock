@@ -1362,6 +1362,14 @@
                 <input type="password" id="ud-password" minlength="6" placeholder="Yeni şifre gir..." autocomplete="new-password">
               </div>
             </div>
+            <div style="height:1px;background:var(--border);margin:18px 0 14px;"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
+              <div>
+                <div style="font-size:13px;font-weight:500;color:var(--text-primary);">E-posta Bildirimleri</div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">Düşük stok uyarılarını e-posta ile al</div>
+              </div>
+              <button type="button" class="toggle-switch" id="ud-email-alerts-toggle" onclick="toggleUdEmailAlerts()"></button>
+            </div>
             <div class="form-error" id="ud-error"></div>
             <div id="ud-success" style="display:none;padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;font-size:12px;color:var(--success);margin-top:10px;"></div>
             <div class="modal-actions" style="justify-content:flex-start;margin-top:20px;">
@@ -1830,6 +1838,8 @@ function openUserDetail(userId) {
   document.getElementById('ud-success').style.display = 'none';
   document.getElementById('ud-submit-btn').disabled = false;
   document.getElementById('user-detail-title').textContent = 'Yükleniyor…';
+  const alertToggle = document.getElementById('ud-email-alerts-toggle');
+  if (alertToggle) alertToggle.classList.remove('on');
 
   // Kullanıcı verisini Supabase'den çek
   sb.from('user_permissions').select('*').eq('user_id', userId).maybeSingle().then(({ data, error }) => {
@@ -1839,10 +1849,13 @@ function openUserDetail(userId) {
     }
     const perms = { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) };
     const displayName = STATIC_NAMES[data.email] || perms._name || '';
-    editingUserDetail = { userId, email: data.email, permData: data.permissions || {} };
+    const alertsOn = !!(data.receives_email_alerts);
+    editingUserDetail = { userId, email: data.email, permData: data.permissions || {}, receivesAlerts: alertsOn };
     document.getElementById('ud-name').value = displayName;
     document.getElementById('ud-email').value = data.email || '';
     document.getElementById('user-detail-title').textContent = displayName || data.email;
+    const t = document.getElementById('ud-email-alerts-toggle');
+    if (t) t.classList.toggle('on', alertsOn);
   });
 }
 
@@ -1850,6 +1863,13 @@ function closeUserDetail() {
   document.getElementById('user-detail-view').style.display = 'none';
   document.getElementById('admin-users-list').style.display = '';
   editingUserDetail = null;
+}
+
+function toggleUdEmailAlerts() {
+  if (!editingUserDetail) return;
+  editingUserDetail.receivesAlerts = !editingUserDetail.receivesAlerts;
+  const btn = document.getElementById('ud-email-alerts-toggle');
+  if (btn) btn.classList.toggle('on', editingUserDetail.receivesAlerts);
 }
 
 async function saveUserDetail(e) {
@@ -1876,7 +1896,7 @@ async function saveUserDetail(e) {
     // 1. user_permissions tablosunu güncelle (isim + e-posta)
     const updatedPerms = { ...(editingUserDetail.permData || {}), _name: newName };
     const { error: permErr } = await sb.from('user_permissions')
-      .update({ email: newEmail, permissions: updatedPerms })
+      .update({ email: newEmail, permissions: updatedPerms, receives_email_alerts: !!editingUserDetail.receivesAlerts })
       .eq('user_id', editingUserDetail.userId);
     if (permErr) throw permErr;
 
