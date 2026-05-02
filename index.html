@@ -470,6 +470,8 @@
   }
   .table-scroll {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 75vh;
   }
   table {
     width: 100%;
@@ -477,6 +479,9 @@
     min-width: 1020px;
   }
   thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     background: var(--bg-secondary);
     color: var(--text-secondary);
     text-align: left;
@@ -1074,6 +1079,9 @@
     border: 1px solid rgba(245,158,11,0.3);
   }
   .btn-admin:hover { background: rgba(245,158,11,0.2); }
+
+  /* SPA view isolation */
+  #main-dashboard.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -1279,15 +1287,15 @@
 <!-- ===== ADMIN PANEL ===== -->
 <div class="admin-panel hidden" id="admin-panel">
   <div class="admin-panel-header">
+    <button class="btn btn-secondary" onclick="closeAdminPanel()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      ← Dashboard'a Dön
+    </button>
     <div class="admin-panel-title">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
       Yönetim Paneli
       <span class="admin-badge">ADMIN</span>
     </div>
-    <button class="btn btn-secondary" onclick="closeAdminPanel()">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      Geri Dön
-    </button>
   </div>
 
   <div class="admin-tabs">
