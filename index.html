@@ -1726,6 +1726,7 @@ async function logAction(action, productName, productBarcode, quantity, notes) {
 let adminCurrentTab = 'users';
 let editingPermUserId = null;
 let editingPermData = {};
+let editingReceivesAlerts = false;
 let editingUserDetail = null;
 
 function openAdminPanel() {
@@ -1954,13 +1955,14 @@ async function loadAuditLogs() {
 function openPermEditor(userId, email) {
   editingPermUserId = userId;
   editingPermData = {};
+  editingReceivesAlerts = false;
   document.getElementById('perm-modal-title').textContent = 'Yetki Düzenle';
   document.getElementById('perm-user-info').textContent = `Kullanıcı: ${email}`;
 
-  // Mevcut yetkileri getir
-  sb.from('user_permissions').select('permissions').eq('user_id', userId).maybeSingle().then(({ data }) => {
+  sb.from('user_permissions').select('permissions, receives_email_alerts').eq('user_id', userId).maybeSingle().then(({ data }) => {
     const current = { ...DEFAULT_PERMISSIONS, ...((data && data.permissions) || {}) };
     editingPermData = { ...current };
+    editingReceivesAlerts = !!(data && data.receives_email_alerts);
     const container = document.getElementById('perm-rows');
     const canGrantAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
     container.innerHTML = PERM_DEFS.filter(d => d.key !== 'admin' || canGrantAdmin).map(d => `
@@ -1971,7 +1973,16 @@ function openPermEditor(userId, email) {
         </div>
         <button type="button" class="toggle-switch ${current[d.key] ? 'on' : ''}" id="toggle-${d.key}"
           onclick="togglePerm('${d.key}')"></button>
-      </div>`).join('');
+      </div>`).join('') + `
+      <div style="height:1px;background:var(--border);margin:10px 0 6px;"></div>
+      <div class="perm-editor-row">
+        <div>
+          <div class="perm-editor-label">E-posta Bildirimleri</div>
+          <div class="perm-editor-desc">Düşük stok uyarılarını e-posta ile alır</div>
+        </div>
+        <button type="button" class="toggle-switch ${editingReceivesAlerts ? 'on' : ''}" id="toggle-email-alerts"
+          onclick="toggleEmailAlerts()"></button>
+      </div>`;
     document.getElementById('perm-modal').classList.add('visible');
   });
 }
@@ -1982,11 +1993,17 @@ function togglePerm(key) {
   if (btn) btn.classList.toggle('on', editingPermData[key]);
 }
 
+function toggleEmailAlerts() {
+  editingReceivesAlerts = !editingReceivesAlerts;
+  const btn = document.getElementById('toggle-email-alerts');
+  if (btn) btn.classList.toggle('on', editingReceivesAlerts);
+}
+
 async function savePermissions() {
   if (!editingPermUserId) return;
   try {
     const { error } = await sb.from('user_permissions')
-      .update({ permissions: editingPermData, role: editingPermData.admin ? 'admin' : 'user' })
+      .update({ permissions: editingPermData, role: editingPermData.admin ? 'admin' : 'user', receives_email_alerts: editingReceivesAlerts })
       .eq('user_id', editingPermUserId);
     if (error) throw error;
     closePermModal();
@@ -2786,8 +2803,14 @@ async function submitStockOut(e) {
     const { error } = await sb.from('products').update(upd).eq('id', p.id);
     if (error) throw error;
 
+    const prevStock = p.stock;
     p.stock = newStock; p.sales7d = newSales7d; p.status = newStatus;
     if (salePrice > 0) { p.price = salePrice; p.saleRate = saleRate; }
+
+    // Stok ilk kez min eşiğinin altına indiyse e-posta tetikle (tekrar tetiklememek için sadece geçişte)
+    if (prevStock > (p.minStock || 0) && newStock <= (p.minStock || 0)) {
+      triggerLowStockAlert(p); // intentionally not awaited — fire and forget
+    }
 
     const noteStr = salePrice > 0
       ? `Satış fiyatı: ${fmtEUR(salePrice)} × ${saleRate.toFixed(2)} = ${fmtTL(salePrice * saleRate)}`
@@ -2800,6 +2823,35 @@ async function submitStockOut(e) {
     errEl.textContent = 'Hata: ' + (err.message || err);
   } finally {
     if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+/* ===== LOW STOCK ALERT ===== */
+async function triggerLowStockAlert(product) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token || SUPABASE_KEY;
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-low-stock-alert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': SUPABASE_KEY
+      },
+      body: JSON.stringify({
+        productName:    product.name,
+        productBarcode: product.barcode || '',
+        newStock:       product.stock,
+        minStock:       product.minStock || 0,
+        depo:           product.depo || ''
+      })
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.warn('Low stock alert failed:', resp.status, txt);
+    }
+  } catch (err) {
+    console.warn('Low stock alert error:', err);
   }
 }
 
