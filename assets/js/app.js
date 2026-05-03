@@ -1,0 +1,1266 @@
+import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
+import { currentUser, isAdmin, canDo, isViewOnly, logAction, bootstrapAuth } from './auth.js';
+import {
+  fmtTL, fmtTLShort, fmtEUR, fmtEURShort,
+  escapeHtml, animateCounter, calcStatus, statusLabel,
+  showTooltip, hideTooltip, toast, showConfirm, closeConfirmModal
+} from './ui.js';
+import { closePermModal } from './admin.js';
+
+const EUR_RATE_KEY = 'stok-dashboard-eur-rate';
+
+const CATEGORY_PALETTE = [
+  '#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444',
+  '#06b6d4', '#ec4899', '#10b981', '#f97316', '#6366f1',
+  '#14b8a6', '#a855f7', '#eab308', '#84cc16', '#0ea5e9'
+];
+
+let products = [];
+let categories = [];
+let editingId = null;
+let stockOutId = null;
+let editingCategoryName = null;
+let eurRate = parseFloat(localStorage.getItem(EUR_RATE_KEY)) || 34.00;
+
+/* import */
+let importRows = [];
+const IMPORT_COL_MAP = {
+  name:     ['ürün adı','urun adi','ad','ürün','urun','name','product name','product','adi'],
+  barcode:  ['barkod no','barkod','barcode','sku','stok kodu','kod'],
+  category: ['kategori','category','grup','group'],
+  depo:     ['depo','warehouse','raf','konum','location','depo/raf'],
+  price:    ['satış fiyatı','satis fiyati','fiyat','sale price','price','satış','satiş fiyati (€)','satış fiyatı (€)'],
+  cost:     ['alış fiyatı','alis fiyati','maliyet','cost','cost price','alış','alis fiyati (€)','alış fiyatı (€)'],
+  stock:    ['stok','stock','adet','miktar','quantity','mevcut stok'],
+  minStock: ['min. stok','min stok','minimum stok','min_stock','minstock','min stock','minimum','eşik'],
+  sales7d:  ['7g satış','7g satis','satış','sales','sales7d','haftalık satış','haftalik satis']
+};
+
+
+/* history */
+let historyProductId = null;
+let historyRows = [];
+
+/* ===== DB HELPERS ===== */
+function dbToProduct(row) {
+  return {
+    id:           row.id,
+    name:         row.name,
+    barcode:      row.barcode || '',
+    category:     row.category,
+    cost:         parseFloat(row.cost_price)  || 0,
+    price:        parseFloat(row.sale_price)  || 0,
+    stock:        row.stock        || 0,
+    minStock:     row.min_stock    || 0,
+    sales7d:      row.sales7d      || 0,
+    status:       row.status       || 'active',
+    depo:         row.warehouse_info || '',
+    purchaseRate: row.purchase_rate || null,
+    saleRate:     row.sale_rate    || null,
+    createdAt:    row.created_at
+  };
+}
+
+function productToDb(p) {
+  return {
+    name:           p.name,
+    barcode:        p.barcode   || null,
+    category:       p.category,
+    cost_price:     p.cost      || 0,
+    sale_price:     p.price     || 0,
+    stock:          p.stock     || 0,
+    min_stock:      p.minStock  || 0,
+    sales7d:        p.sales7d   || 0,
+    status:         p.status    || 'active',
+    warehouse_info: p.depo      || null,
+    purchase_rate:  p.purchaseRate || null,
+    sale_rate:      p.saleRate  || null
+  };
+}
+
+export async function loadData() {
+  if (!currentUser) return;
+  try {
+    const [prodsRes, catsRes] = await Promise.all([
+      sb.from('products').select('*').order('created_at', { ascending: true }),
+      sb.from('categories').select('*').order('name', { ascending: true })
+    ]);
+    if (prodsRes.error) throw prodsRes.error;
+    if (catsRes.error)  throw catsRes.error;
+    products   = (prodsRes.data || []).map(dbToProduct);
+    categories = (catsRes.data  || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
+  } catch (err) {
+    console.error('Veri yükleme hatası:', err.message || err);
+    toast('Veriler yüklenemedi: ' + (err.message || err), 'error');
+    products   = [];
+    categories = [];
+  }
+}
+
+function getCategoryColor(name) {
+  const c = categories.find(x => x.name === name);
+  return c ? c.color : '#6b7280';
+}
+function pickNextColor() {
+  const used = new Set(categories.map(c => c.color));
+  return CATEGORY_PALETTE.find(c => !used.has(c)) || CATEGORY_PALETTE[categories.length % CATEGORY_PALETTE.length];
+}
+
+/* ===== STATS ===== */
+function renderStats() {
+  const total = products.length;
+  const totalQty = products.reduce((s, p) => s + (p.stock || 0), 0);
+  const stockValueEUR = products.reduce((s, p) => s + p.stock * (p.cost || 0), 0);
+  const lowCount = products.filter(p => p.stock <= p.minStock).length;
+  const margins = products.filter(p => p.price > 0).map(p => ((p.price - p.cost) / p.price) * 100);
+  const avgMargin = margins.length ? margins.reduce((s, x) => s + x, 0) / margins.length : 0;
+  const priced = products.filter(p => p.price > 0);
+  const avgUnitProfitTL = priced.length
+    ? priced.reduce((s, p) => {
+        const buyTL  = (p.cost  || 0) * (p.purchaseRate || eurRate);
+        const sellTL = (p.price || 0) * (p.saleRate     || eurRate);
+        return s + (sellTL - buyTL);
+      }, 0) / priced.length
+    : 0;
+
+  const viewOnly = isViewOnly();
+  animateCounter(document.getElementById('stat-total'), total);
+  document.getElementById('stat-total-trend').textContent = `${total} çeşit · ${totalQty.toLocaleString('tr-TR')} adet toplam`;
+
+  if (viewOnly) {
+    document.getElementById('stat-value').textContent = '—';
+    document.getElementById('stat-value-trend').textContent = 'Yetkisiz alan';
+  } else {
+    animateCounter(document.getElementById('stat-value'), stockValueEUR, 1500, v => fmtEURShort(v));
+    const stockRevenueEUR = products.reduce((s, p) => s + p.stock * (p.price || 0), 0);
+    document.getElementById('stat-value-trend').textContent = `TL eşd.: ${fmtTLShort(stockValueEUR * eurRate)} · Satış: ${fmtEURShort(stockRevenueEUR)}`;
+  }
+
+  animateCounter(document.getElementById('stat-low'), lowCount);
+  document.getElementById('stat-low-trend').textContent = lowCount > 0 ? `${lowCount} ürün acil aksiyon gerekli` : 'Tüm stoklar yeterli';
+
+  if (viewOnly) {
+    document.getElementById('stat-margin').textContent = '—';
+    document.getElementById('stat-margin-trend').textContent = 'Yetkisiz alan';
+  } else {
+    animateCounter(document.getElementById('stat-margin'), avgMargin, 1500, v => '%' + v.toFixed(1));
+    document.getElementById('stat-margin-trend').textContent = avgUnitProfitTL !== 0
+      ? `Ort. birim kâr: ${fmtTLShort(avgUnitProfitTL)}`
+      : 'Tüm ürünler dahil';
+  }
+}
+
+/* ===== PIE CHART ===== */
+function renderPie() {
+  const wrap   = document.getElementById('pie-wrap');
+  const legend = document.getElementById('pie-legend');
+  const counts = {};
+  categories.forEach(c => counts[c.name] = 0);
+  products.forEach(p => {
+    if (counts[p.category] === undefined) counts[p.category] = 0;
+    counts[p.category]++;
+  });
+  const allLabels = Array.from(new Set([...categories.map(c => c.name), ...Object.keys(counts)]));
+  const data = allLabels
+    .map(name => ({ label: name, value: counts[name] || 0, color: getCategoryColor(name) }))
+    .filter(d => d.value > 0);
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const size = 240, cx = size / 2, cy = size / 2, r = 95, ir = r * 0.6;
+  let html = `<svg viewBox="0 0 ${size} ${size}" width="100%" style="max-width:280px;margin:0 auto;display:block;">`;
+
+  if (total === 0) {
+    html += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="14">Veri yok</text></svg>`;
+    wrap.innerHTML = html;
+    legend.innerHTML = '';
+    return;
+  }
+
+  let cumAngle = -Math.PI / 2;
+  data.forEach((d, i) => {
+    const sliceAngle = (d.value / total) * Math.PI * 2;
+    const endAngle = cumAngle + sliceAngle;
+    const x1 = cx + r * Math.cos(cumAngle),  y1 = cy + r * Math.sin(cumAngle);
+    const x2 = cx + r * Math.cos(endAngle),   y2 = cy + r * Math.sin(endAngle);
+    const ix1 = cx + ir * Math.cos(endAngle), iy1 = cy + ir * Math.sin(endAngle);
+    const ix2 = cx + ir * Math.cos(cumAngle), iy2 = cy + ir * Math.sin(cumAngle);
+    const large = sliceAngle > Math.PI ? 1 : 0;
+    const path = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${large} 0 ${ix2} ${iy2} Z`;
+    const pct = ((d.value / total) * 100).toFixed(1);
+    html += `<path d="${path}" fill="${d.color}" stroke="#1a1a1a" stroke-width="2" class="pie-slice"
+      data-label="${d.label}" data-value="${d.value}" data-pct="${pct}"
+      style="transform-origin:${cx}px ${cy}px;transition:transform 0.2s ease;opacity:0;animation:pieIn 0.6s ease ${i * 0.1}s forwards;cursor:pointer;"></path>`;
+    cumAngle = endAngle;
+  });
+
+  html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" fill="#f5f5f5" font-size="28" font-weight="700">${total}</text>`;
+  html += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="11">Toplam Ürün</text>`;
+  html += `</svg>`;
+
+  if (!document.getElementById('pie-anim-style')) {
+    const s = document.createElement('style');
+    s.id = 'pie-anim-style';
+    s.textContent = `@keyframes pieIn{from{opacity:0;transform:scale(0.7) rotate(-45deg)}to{opacity:1;transform:scale(1) rotate(0)}} .pie-slice:hover{transform:scale(1.04)}`;
+    document.head.appendChild(s);
+  }
+
+  wrap.innerHTML = html;
+  legend.innerHTML = data.map(d => `
+    <div class="legend-item">
+      <span class="legend-color" style="background:${d.color}"></span>
+      <span>${d.label} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
+    </div>`).join('');
+
+  wrap.querySelectorAll('.pie-slice').forEach(el => {
+    el.addEventListener('mousemove', e => showTooltip(e, `${el.dataset.label}<br><b>${el.dataset.value} ürün</b> · ${el.dataset.pct}%`));
+    el.addEventListener('mouseleave', hideTooltip);
+  });
+}
+
+/* ===== BAR CHART ===== */
+function renderBar() {
+  const wrap = document.getElementById('bar-wrap');
+  const top = [...products].sort((a, b) => b.sales7d - a.sales7d).slice(0, 8);
+  if (top.length === 0 || top[0].sales7d === 0) {
+    wrap.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);">Satış verisi yok</div>`;
+    return;
+  }
+  const w = 600, h = 280, pad = { l: 40, r: 16, t: 16, b: 60 };
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const maxVal = Math.max(...top.map(p => p.sales7d));
+  const niceMax = Math.ceil(maxVal / 10) * 10 || 10;
+  const barW = innerW / top.length * 0.6;
+  const gap  = innerW / top.length * 0.4;
+  const stepX = innerW / top.length;
+
+  let html = `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;">`;
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.t + (innerH * i / 5);
+    const v = Math.round(niceMax * (1 - i / 5));
+    html += `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="#2a2a2a" stroke-width="1"/>`;
+    html += `<text x="${pad.l - 8}" y="${y + 4}" text-anchor="end" fill="#a0a0a0" font-size="10">${v}</text>`;
+  }
+  top.forEach((p, i) => {
+    const barH = (p.sales7d / niceMax) * innerH;
+    const x = pad.l + i * stepX + gap / 2;
+    const y = pad.t + innerH - barH;
+    const shortName = p.name.length > 14 ? p.name.slice(0, 12) + '…' : p.name;
+    html += `<rect x="${x}" y="${pad.t + innerH}" width="${barW}" height="0" rx="4"
+      fill="${getCategoryColor(p.category)}" class="bar-rect"
+      data-label="${p.name}" data-value="${p.sales7d}"
+      style="cursor:pointer;transition:fill 0.2s;">
+      <animate attributeName="height" from="0" to="${barH}" dur="0.8s" begin="${i * 0.07}s" fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1"/>
+      <animate attributeName="y" from="${pad.t + innerH}" to="${y}" dur="0.8s" begin="${i * 0.07}s" fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1"/>
+    </rect>`;
+    html += `<text x="${x + barW / 2}" y="${y - 6}" text-anchor="middle" fill="#f5f5f5" font-size="11" font-weight="600" opacity="0">
+      ${p.sales7d}
+      <animate attributeName="opacity" from="0" to="1" dur="0.4s" begin="${0.8 + i * 0.07}s" fill="freeze"/>
+    </text>`;
+    html += `<text x="${x + barW / 2}" y="${pad.t + innerH + 18}" text-anchor="middle" fill="#a0a0a0" font-size="10" transform="rotate(-25 ${x + barW / 2} ${pad.t + innerH + 18})">${shortName}</text>`;
+  });
+  html += `</svg>`;
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.bar-rect').forEach(el => {
+    el.addEventListener('mousemove', e => showTooltip(e, `${el.dataset.label}<br><b>${el.dataset.value} satış</b>`));
+    el.addEventListener('mouseleave', () => { hideTooltip(); el.style.filter = ''; });
+    el.addEventListener('mouseenter', () => el.style.filter = 'brightness(1.2)');
+  });
+}
+
+/* ===== TABLE ===== */
+function getFiltered() {
+  const search = (document.getElementById('search-input').value || '').toLowerCase().trim();
+  const cat    = document.getElementById('filter-category').value;
+  const status = document.getElementById('filter-status').value;
+  let list = products.slice();
+  if (search) list = list.filter(p => p.name.toLowerCase().includes(search) || (p.barcode || '').toLowerCase().includes(search));
+  if (cat)    list = list.filter(p => p.category === cat);
+  if (status) list = list.filter(p => calcStatus(p) === status);
+  return list;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('table-body');
+  const list  = getFiltered();
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <div>Ürün bulunamadı</div>
+    </div></td></tr>`;
+    return;
+  }
+  const viewOnly = isViewOnly();
+  tbody.innerHTML = list.map((p, idx) => {
+    const status   = calcStatus(p);
+    const margin   = p.price > 0 ? ((p.price - p.cost) / p.price) * 100 : 0;
+    const marginCls = margin > 40 ? 'margin-good' : margin > 20 ? 'margin-mid' : 'margin-bad';
+    const stockPct = p.minStock > 0 ? Math.min(100, (p.stock / p.minStock) * 100) : 100;
+    const barCls   = p.stock === 0 ? 'bad' : p.stock <= p.minStock ? 'mid' : 'good';
+    return `
+      <tr class="${status}" style="animation-delay:${idx * 0.02}s">
+        <td>
+          <div class="product-name">${escapeHtml(p.name)}</div>
+          <div class="product-barcode">${escapeHtml(p.barcode)}</div>
+        </td>
+        <td><span class="badge" style="border-color:${getCategoryColor(p.category)}40;color:${getCategoryColor(p.category)}">${escapeHtml(p.category)}</span></td>
+        <td><span style="font-size:12px;font-weight:500;color:var(--text-secondary)">${escapeHtml(p.depo || '—')}</span></td>
+        <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<strong>${fmtEUR(p.price)}</strong>`}</td>
+        <td style="color:var(--text-secondary)">${viewOnly ? '—' : fmtEUR(p.cost)}</td>
+        <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<span class="${marginCls}">%${margin.toFixed(1)}</span>`}</td>
+        <td>
+          <div class="stock-cell">
+            <span class="stock-num">${p.stock}</span>
+            <div class="stock-bar"><div class="stock-bar-fill ${barCls}" style="width:${stockPct}%"></div></div>
+          </div>
+        </td>
+        <td class="center"><strong>${p.sales7d}</strong></td>
+        <td><span class="badge ${status}">${statusLabel(status)}</span></td>
+        <td>
+          <div class="row-actions">
+            ${canDo('make_sales') ? `<button class="icon-btn warn" title="Stok Çıkar (Satış)" onclick="openStockOutModal(${p.id})" ${p.stock === 0 ? 'disabled' : ''}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M13 18l6-6-6-6"></path></svg>
+            </button>` : ''}
+            ${canDo('add_products') ? `<button class="icon-btn" title="Düzenle" onclick="openEditModal(${p.id})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>` : ''}
+            ${isAdmin() ? `<button class="icon-btn danger" title="Sil" onclick="askDelete(${p.id})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+            </button>` : ''}
+            ${canDo('view_history') ? `<button class="icon-btn" title="Hareket Geçmişi" onclick="openHistoryModal(${p.id})" style="opacity:0.7">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+export function populateFilters() {
+  const sel = document.getElementById('filter-category');
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">Tüm Kategoriler</option>' +
+    categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+  if (currentVal && categories.some(c => c.name === currentVal)) sel.value = currentVal;
+
+  const fc = document.getElementById('f-category');
+  const currentFc = fc.value;
+  fc.innerHTML = '<option value="">Seçiniz...</option>' +
+    categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+  if (currentFc && categories.some(c => c.name === currentFc)) fc.value = currentFc;
+}
+
+export function renderAll() {
+  renderStats();
+  renderPie();
+  renderBar();
+  renderTable();
+}
+
+/* ===== ADD / EDIT MODAL ===== */
+export function openAddModal() {
+  if (categories.length === 0) {
+    toast('Önce en az bir kategori ekleyin', 'error');
+    openCategoryModal();
+    return;
+  }
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Yeni Ürün Ekle';
+  document.getElementById('product-form').reset();
+  document.getElementById('form-error').textContent = '';
+  document.getElementById('price-field-wrapper').style.display = 'none';
+  document.getElementById('product-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('f-name').focus(), 100);
+}
+export function openEditModal(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Ürünü Düzenle';
+  document.getElementById('f-name').value    = p.name;
+  document.getElementById('f-barcode').value = p.barcode || '';
+  document.getElementById('f-category').value = p.category;
+  document.getElementById('f-stock').value   = p.stock;
+  document.getElementById('f-minStock').value = p.minStock || '';
+  document.getElementById('f-cost').value    = p.cost > 0 ? p.cost : '';
+  document.getElementById('f-depo').value    = p.depo || '';
+  document.getElementById('f-price').value   = p.price > 0 ? p.price : '';
+  document.getElementById('form-error').textContent = '';
+  document.getElementById('price-field-wrapper').style.display = '';
+  document.getElementById('product-modal').classList.add('visible');
+}
+export function closeProductModal() { document.getElementById('product-modal').classList.remove('visible'); }
+export function closeProductModalOnOverlay(e) { if (e.target.id === 'product-modal') closeProductModal(); }
+
+export async function submitProductForm(e) {
+  e.preventDefault();
+  const name     = document.getElementById('f-name').value.trim();
+  const barcode  = document.getElementById('f-barcode').value.trim();
+  const category = document.getElementById('f-category').value;
+  const stock    = parseInt(document.getElementById('f-stock').value);
+  const minStock = parseInt(document.getElementById('f-minStock').value) || 0;
+  const cost     = parseFloat(document.getElementById('f-cost').value) || 0;
+  const price    = parseFloat(document.getElementById('f-price').value) || 0;
+  const depo     = document.getElementById('f-depo').value.trim();
+  const errEl    = document.getElementById('form-error');
+  const saveBtn  = e.target.querySelector('button[type="submit"]');
+  errEl.textContent = '';
+
+  if (isNaN(stock)) { errEl.textContent = 'Stok adedi geçerli olmalı.'; return; }
+  if (stock < 0 || minStock < 0) { errEl.textContent = 'Negatif değer giremezsiniz.'; return; }
+  if (price > 0 && cost > 0 && price < cost) { errEl.textContent = 'Satış fiyatı alış fiyatından düşük olamaz.'; return; }
+
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor…'; }
+  try {
+    const barcodeMatch = barcode ? products.find(p => (p.barcode || '').toLowerCase() === barcode.toLowerCase() && p.id !== editingId) : null;
+    const nameMatch    = !barcodeMatch ? products.find(p => p.name.toLowerCase() === name.toLowerCase() && p.id !== editingId) : null;
+    const dup = barcodeMatch || nameMatch;
+    const dupReason = barcodeMatch ? 'barkod' : 'ürün adı';
+
+    if (dup && !editingId) {
+      const newStock  = dup.stock + stock;
+      const newStatus = calcStatus({ ...dup, stock: newStock });
+      const upd = { stock: newStock, status: newStatus, purchase_rate: eurRate };
+      if (cost > 0) upd.cost_price     = cost;
+      if (depo)     upd.warehouse_info = depo;
+      const { error } = await sb.from('products').update(upd).eq('id', dup.id);
+      if (error) throw error;
+      dup.stock = newStock; dup.status = newStatus;
+      if (cost > 0) dup.cost = cost;
+      if (depo)     dup.depo = depo;
+      dup.purchaseRate = eurRate;
+      closeProductModal(); renderAll();
+      toast(`"${dup.name}" — stok ${stock} adet artırıldı (${dupReason} eşleşti)`);
+      return;
+    }
+    if (dup && editingId) { errEl.textContent = `Bu ${dupReason} zaten kullanımda: ${dup.name}`; return; }
+
+    if (editingId) {
+      const p = products.find(x => x.id === editingId);
+      const dbRow = productToDb({ ...p, name, barcode, category, stock, minStock, cost, price, depo });
+      const { error } = await sb.from('products').update(dbRow).eq('id', editingId);
+      if (error) throw error;
+      Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo });
+      p.status = calcStatus(p);
+      toast('Ürün güncellendi');
+    } else {
+      const newPdata = { name, barcode, category, depo, cost, price: 0, stock, minStock, sales7d: 0, purchaseRate: eurRate };
+      newPdata.status = calcStatus({ stock, minStock });
+      const { data, error } = await sb.from('products').insert(productToDb(newPdata)).select().single();
+      if (error) throw error;
+      products.push(dbToProduct(data));
+      toast('Ürün eklendi');
+    }
+    closeProductModal(); renderAll();
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Kaydet'; }
+  }
+}
+
+/* ===== STOK ÇIKAR (SATIŞ) ===== */
+export function openStockOutModal(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  if (p.stock <= 0) { toast('Bu ürün zaten tükendi'); return; }
+  stockOutId = id;
+  document.getElementById('stockout-product-name').textContent = `${p.name} (${p.barcode})`;
+  document.getElementById('stockout-current').textContent = `${p.stock} adet`;
+  document.getElementById('stockout-qty').value   = 1;
+  document.getElementById('stockout-qty').max     = p.stock;
+  document.getElementById('stockout-price').value = p.price > 0 ? p.price : '';
+  document.getElementById('stockout-rate').value  = eurRate.toFixed(2);
+  document.getElementById('stockout-error').textContent = '';
+  document.getElementById('stockout-modal').classList.add('visible');
+  updateStockOutProfit();
+  setTimeout(() => document.getElementById('stockout-qty').focus(), 100);
+}
+export function updateStockOutProfit() {
+  const p = products.find(x => x.id === stockOutId);
+  if (!p) return;
+  const salePrice = parseFloat(document.getElementById('stockout-price').value) || 0;
+  const saleRate  = parseFloat(document.getElementById('stockout-rate').value)  || eurRate;
+  const qty       = parseInt(document.getElementById('stockout-qty').value) || 1;
+  const display   = document.getElementById('stockout-profit-display');
+  const valEl     = document.getElementById('stockout-profit-val');
+  if (salePrice <= 0 || (p.cost || 0) <= 0) { display.style.display = 'none'; return; }
+  const buyTL     = (p.cost  || 0) * (p.purchaseRate || eurRate);
+  const sellTL    = salePrice * saleRate;
+  const unitProfit = sellTL - buyTL;
+  display.style.display = 'flex';
+  valEl.textContent = `${fmtTL(unitProfit)} × ${qty} = ${fmtTL(unitProfit * qty)}`;
+  valEl.className   = 'profit-val ' + (unitProfit >= 0 ? 'profit-pos' : 'profit-neg');
+}
+export function closeStockOutModal() {
+  document.getElementById('stockout-modal').classList.remove('visible');
+  stockOutId = null;
+}
+export function closeStockOutOnOverlay(e) { if (e.target.id === 'stockout-modal') closeStockOutModal(); }
+
+export async function submitStockOut(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('stockout-error');
+  errEl.textContent = '';
+  const p = products.find(x => x.id === stockOutId);
+  if (!p) { closeStockOutModal(); return; }
+  const qty = parseInt(document.getElementById('stockout-qty').value);
+  if (isNaN(qty) || qty < 1) { errEl.textContent = 'Geçerli bir adet girin.'; return; }
+  if (qty > p.stock) { errEl.textContent = `En fazla ${p.stock} adet çıkarabilirsiniz.`; return; }
+  const salePrice = parseFloat(document.getElementById('stockout-price').value) || 0;
+  const saleRate  = parseFloat(document.getElementById('stockout-rate').value)  || eurRate;
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const newStock   = p.stock - qty;
+    const newSales7d = (p.sales7d || 0) + qty;
+    const newStatus  = calcStatus({ ...p, stock: newStock });
+    const upd = { stock: newStock, sales7d: newSales7d, status: newStatus };
+    if (salePrice > 0) { upd.sale_price = salePrice; upd.sale_rate = saleRate; }
+    const { error } = await sb.from('products').update(upd).eq('id', p.id);
+    if (error) throw error;
+    const prevStock = p.stock;
+    p.stock = newStock; p.sales7d = newSales7d; p.status = newStatus;
+    if (salePrice > 0) { p.price = salePrice; p.saleRate = saleRate; }
+    if (prevStock > (p.minStock || 0) && newStock <= (p.minStock || 0)) {
+      triggerLowStockAlert(p);
+    }
+    const noteStr = salePrice > 0
+      ? `Satış fiyatı: ${fmtEUR(salePrice)} × ${saleRate.toFixed(2)} = ${fmtTL(salePrice * saleRate)}`
+      : '';
+    logAction('SATIŞ', p.name, p.barcode, qty, noteStr);
+    closeStockOutModal(); renderAll();
+    toast(`${qty} adet stoktan düşüldü`);
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+/* ===== LOW STOCK ALERT ===== */
+async function triggerLowStockAlert(product) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token || SUPABASE_KEY;
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-low-stock-alert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': SUPABASE_KEY
+      },
+      body: JSON.stringify({
+        productName:    product.name,
+        productBarcode: product.barcode || '',
+        newStock:       product.stock,
+        minStock:       product.minStock || 0,
+        depo:           product.depo || ''
+      })
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.warn('Low stock alert failed:', resp.status, txt);
+    }
+  } catch (err) {
+    console.warn('Low stock alert error:', err);
+  }
+}
+
+/* ===== DELETE ===== */
+export function askDelete(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  showConfirm(`"${p.name}" silinecek`, 'Bu işlem geri alınamaz. Ürün kalıcı olarak silinecek.', () => {
+    const row = document.querySelector(`#table-body tr [onclick="askDelete(${id})"]`)?.closest('tr');
+    if (row) {
+      row.classList.add('deleting');
+      setTimeout(() => doDelete(id), 380);
+    } else {
+      doDelete(id);
+    }
+  });
+}
+async function doDelete(id) {
+  try {
+    const { error } = await sb.from('products').delete().eq('id', id);
+    if (error) throw error;
+    products = products.filter(p => p.id !== id);
+    renderAll();
+    toast('Ürün silindi');
+  } catch (err) {
+    toast('Silme hatası: ' + (err.message || err), 'error');
+  }
+}
+
+/* ===== KATEGORİ YÖNETİMİ ===== */
+export function openCategoryModal() {
+  editingCategoryName = null;
+  document.getElementById('category-error').textContent = '';
+  document.getElementById('new-category-name').value = '';
+  renderCategoryList();
+  document.getElementById('category-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('new-category-name').focus(), 100);
+}
+export function closeCategoryModal() {
+  document.getElementById('category-modal').classList.remove('visible');
+  editingCategoryName = null;
+}
+export function closeCategoryOnOverlay(e) { if (e.target.id === 'category-modal') closeCategoryModal(); }
+
+function renderCategoryList() {
+  const wrap = document.getElementById('category-list');
+  if (categories.length === 0) {
+    wrap.innerHTML = `<div class="category-empty">Henüz kategori yok. Aşağıdan ilk kategorini ekle.</div>`;
+    return;
+  }
+  wrap.innerHTML = categories.map((c, i) => {
+    const count = products.filter(p => p.category === c.name).length;
+    const isEditing = editingCategoryName === c.name;
+    return `
+      <div class="category-row" data-idx="${i}">
+        <span class="category-swatch" data-act="color" style="background:${c.color}" title="Renk değiştir"></span>
+        ${isEditing
+          ? `<input class="category-name-input" data-act="rename-input" type="text" value="${escapeHtml(c.name)}" maxlength="40">`
+          : `<span class="category-name">${escapeHtml(c.name)}</span>`}
+        <span class="category-count">${count} ürün</span>
+        <div class="category-actions">
+          <button class="icon-btn" data-act="edit" title="Düzenle">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </button>
+          <button class="icon-btn danger" data-act="delete" title="Sil">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+  if (editingCategoryName) {
+    const inp = wrap.querySelector('.category-name-input');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+}
+
+function handleCategoryListClick(e) {
+  const row = e.target.closest('.category-row');
+  if (!row) return;
+  const idx = parseInt(row.dataset.idx);
+  const cat = categories[idx];
+  if (!cat) return;
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'color')  cycleCategoryColor(cat.name);
+  else if (act === 'edit')   startEditCategory(cat.name);
+  else if (act === 'delete') askDeleteCategory(cat.name);
+}
+function handleCategoryListKeydown(e) {
+  if (!e.target.matches('[data-act="rename-input"]')) return;
+  const row = e.target.closest('.category-row');
+  const idx = parseInt(row?.dataset.idx);
+  const cat = categories[idx];
+  if (!cat) return;
+  if (e.key === 'Enter')  { e.preventDefault(); commitCategoryRename(cat.name, e.target.value); }
+  else if (e.key === 'Escape') { editingCategoryName = null; renderCategoryList(); }
+}
+function handleCategoryListBlur(e) {
+  if (!e.target.matches('[data-act="rename-input"]')) return;
+  const row = e.target.closest('.category-row');
+  const idx = parseInt(row?.dataset.idx);
+  const cat = categories[idx];
+  if (!cat) return;
+  commitCategoryRename(cat.name, e.target.value);
+}
+
+export async function submitNewCategory(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('category-error');
+  errEl.textContent = '';
+  const name = document.getElementById('new-category-name').value.trim();
+  if (!name) { errEl.textContent = 'Kategori adı boş olamaz.'; return; }
+  if (categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    errEl.textContent = 'Bu isimde bir kategori zaten var.'; return;
+  }
+  try {
+    const color = pickNextColor();
+    const { error } = await sb.from('categories').insert({ name, color });
+    if (error) throw error;
+    categories.push({ name, color });
+    document.getElementById('new-category-name').value = '';
+    renderCategoryList(); populateFilters();
+    toast('Kategori eklendi');
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  }
+}
+
+function startEditCategory(name) {
+  editingCategoryName = name;
+  document.getElementById('category-error').textContent = '';
+  renderCategoryList();
+}
+async function commitCategoryRename(oldName, rawNew) {
+  const newName = (rawNew || '').trim();
+  const errEl = document.getElementById('category-error');
+  errEl.textContent = '';
+  if (!newName) { errEl.textContent = 'Kategori adı boş olamaz.'; editingCategoryName = null; renderCategoryList(); return; }
+  if (newName === oldName) { editingCategoryName = null; renderCategoryList(); return; }
+  if (categories.some(c => c.name.toLowerCase() === newName.toLowerCase() && c.name !== oldName)) {
+    errEl.textContent = 'Bu isimde bir kategori zaten var.'; return;
+  }
+  try {
+    const { error: catErr } = await sb.from('categories').update({ name: newName }).eq('name', oldName);
+    if (catErr) throw catErr;
+    const affectedIds = products.filter(p => p.category === oldName).map(p => p.id);
+    if (affectedIds.length > 0) {
+      const { error: prodErr } = await sb.from('products').update({ category: newName }).eq('category', oldName);
+      if (prodErr) throw prodErr;
+      products.forEach(p => { if (p.category === oldName) p.category = newName; });
+    }
+    const cat = categories.find(c => c.name === oldName);
+    if (cat) cat.name = newName;
+    editingCategoryName = null;
+    renderCategoryList(); populateFilters(); renderAll();
+    toast('Kategori güncellendi');
+  } catch (err) {
+    errEl.textContent = 'Hata: ' + (err.message || err);
+  }
+}
+function askDeleteCategory(name) {
+  const count = products.filter(p => p.category === name).length;
+  if (count > 0) {
+    document.getElementById('category-error').textContent =
+      `Önce bu kategorideki ${count} ürünü başka kategoriye taşı veya sil.`;
+    return;
+  }
+  showConfirm(`"${name}" silinecek`, 'Bu kategori kalıcı olarak silinecek.', async () => {
+    try {
+      const { error } = await sb.from('categories').delete().eq('name', name);
+      if (error) throw error;
+      categories = categories.filter(c => c.name !== name);
+      renderCategoryList(); populateFilters(); renderAll();
+      toast('Kategori silindi');
+    } catch (err) {
+      toast('Hata: ' + (err.message || err), 'error');
+    }
+  });
+}
+async function cycleCategoryColor(name) {
+  const cat = categories.find(c => c.name === name);
+  if (!cat) return;
+  const idx      = CATEGORY_PALETTE.indexOf(cat.color);
+  const newColor = CATEGORY_PALETTE[(idx + 1) % CATEGORY_PALETTE.length];
+  try {
+    const { error } = await sb.from('categories').update({ color: newColor }).eq('name', name);
+    if (error) throw error;
+    cat.color = newColor;
+    renderCategoryList(); renderAll();
+  } catch (err) {
+    toast('Hata: ' + (err.message || err), 'error');
+  }
+}
+
+/* ===== CSV EXPORT ===== */
+export function exportCSV() {
+  const headers = ['ID', 'Ürün Adı', 'Barkod No', 'Kategori', 'Depo', 'Fiyat (€)', 'Maliyet (€)', 'Kar Marji (%)', 'Stok', 'Min. Stok', '7g Satış', 'Stok Değeri', 'Durum'];
+  const rows = products.map(p => {
+    const margin = p.price > 0 ? ((p.price - p.cost) / p.price * 100).toFixed(2) : 0;
+    return [
+      p.id, p.name, p.barcode, p.category, p.depo || '',
+      p.price.toFixed(2).replace('.', ','), p.cost.toFixed(2).replace('.', ','),
+      String(margin).replace('.', ','),
+      p.stock, p.minStock, p.sales7d,
+      (p.stock * p.cost).toFixed(2).replace('.', ','),
+      statusLabel(calcStatus(p))
+    ];
+  });
+  const csv = [headers, ...rows].map(row =>
+    row.map(cell => {
+      const s = String(cell);
+      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(';')
+  ).join('\r\n');
+  const BOM  = '﻿';
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `stok-raporu-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV indirildi');
+}
+
+/* ===== EUR/TRY KURU ===== */
+export async function fetchAndUpdateEurRate() {
+  const icon  = document.getElementById('eur-refresh-icon');
+  const valEl = document.getElementById('eur-rate-val');
+  const dateEl = document.getElementById('eur-rate-date');
+  if (icon) icon.classList.add('spinning');
+
+  async function trySource(url, extract) {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return extract(await res.json());
+    } finally {
+      clearTimeout(tid);
+    }
+  }
+  try {
+    let result = null;
+    try {
+      result = await trySource(
+        'https://api.frankfurter.app/latest?from=EUR&to=TRY',
+        j => ({ rate: j.rates?.TRY, date: j.date })
+      );
+    } catch (_) {
+      result = await trySource(
+        'https://open.er-api.com/v6/latest/EUR',
+        j => ({ rate: j.rates?.TRY, date: j.time_last_update_utc?.slice(0, 10) })
+      );
+    }
+    if (result?.rate && result.rate > 0) {
+      eurRate = result.rate;
+      localStorage.setItem(EUR_RATE_KEY, String(eurRate));
+      if (valEl)  valEl.textContent  = eurRate.toFixed(2);
+      if (dateEl) dateEl.textContent = result.date || '';
+      renderAll();
+    } else {
+      throw new Error('Geçersiz kur verisi');
+    }
+  } catch (err) {
+    console.warn('EUR kuru alınamadı:', err);
+    if (valEl)  valEl.textContent  = eurRate.toFixed(2);
+    if (dateEl) dateEl.textContent = 'önbellek';
+  } finally {
+    if (icon) icon.classList.remove('spinning');
+  }
+}
+
+/* ===== INIT ===== */
+function init() {
+  const valEl = document.getElementById('eur-rate-val');
+  if (valEl) {
+    valEl.textContent = eurRate.toFixed(2);
+    const cached = localStorage.getItem(EUR_RATE_KEY);
+    const dateEl = document.getElementById('eur-rate-date');
+    if (cached && dateEl) dateEl.textContent = 'önbellek';
+  }
+  document.getElementById('search-input').addEventListener('input', renderTable);
+  document.getElementById('filter-category').addEventListener('change', renderTable);
+  document.getElementById('filter-status').addEventListener('change', renderTable);
+  const catList = document.getElementById('category-list');
+  catList.addEventListener('click', handleCategoryListClick);
+  catList.addEventListener('keydown', handleCategoryListKeydown);
+  catList.addEventListener('blur', handleCategoryListBlur, true);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeProductModal();
+      closeConfirmModal();
+      closeStockOutModal();
+      closeCategoryModal();
+      closePermModal();
+      closeImportModal();
+      closeHistoryModal();
+    }
+  });
+}
+
+/* ===== LOG MOVEMENT ===== */
+async function logMovement({ productId, productName, type, quantity = 0, oldStock = null, newStock = null, oldPrice = null, newPrice = null, oldCost = null, newCost = null, notes = '' }) {
+  if (!currentUser) return;
+  try {
+    await sb.from('stock_movements').insert({
+      product_id:   productId || null,
+      product_name: productName,
+      user_id:      currentUser.id,
+      user_email:   currentUser.email,
+      type,
+      quantity,
+      old_stock:    oldStock,
+      new_stock:    newStock,
+      old_price:    oldPrice,
+      new_price:    newPrice,
+      old_cost:     oldCost,
+      new_cost:     newCost,
+      notes
+    });
+  } catch (e) {
+    console.warn('logMovement failed:', e);
+  }
+}
+
+/* ===== CSV IMPORT ===== */
+function openImportModal() {
+  if (!canDo('add_products')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
+  importRows = [];
+  document.getElementById('import-step-1').style.display = '';
+  document.getElementById('import-step-2').style.display = 'none';
+  document.getElementById('import-step-3').style.display = 'none';
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('import-error').textContent = '';
+  document.getElementById('import-modal').classList.add('visible');
+}
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('visible');
+  importRows = [];
+}
+function closeImportOnOverlay(e) { if (e.target.id === 'import-modal') closeImportModal(); }
+
+function goImportStep1() {
+  document.getElementById('import-step-2').style.display = 'none';
+  document.getElementById('import-step-1').style.display = '';
+  document.getElementById('import-error').textContent = '';
+  document.getElementById('import-file-input').value = '';
+}
+
+function downloadImportTemplate() {
+  const headers = ['Ürün Adı','Barkod No','Kategori','Depo','Satış Fiyatı (€)','Alış Fiyatı (€)','Stok','Min. Stok','7g Satış'];
+  const example = ['Örnek Ürün','BRK-001','Elektronik','A Rafı','29.99','15.00','50','10','5'];
+  const csv = [headers, example].map(row =>
+    row.map(c => /[",;\n]/.test(String(c)) ? `"${String(c).replace(/"/g,'""')}"` : String(c)).join(';')
+  ).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'stok-import-sablonu.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('Şablon indirildi');
+}
+
+function _normalizeHdr(h) {
+  return String(h).toLowerCase().trim().replace(/\s+/g,' ').replace(/[()€₺%*]/g,'').trim();
+}
+
+function _detectMapping(headers) {
+  const norm = headers.map(_normalizeHdr);
+  const map = {};
+  for (const [field, aliases] of Object.entries(IMPORT_COL_MAP)) {
+    for (let i = 0; i < norm.length; i++) {
+      if (aliases.includes(norm[i])) {
+        if (!(field in map)) { map[field] = i; break; }
+      }
+    }
+  }
+  return map;
+}
+
+function handleImportFileDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+}
+function handleImportFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processImportFile(file);
+}
+
+async function processImportFile(file) {
+  const errEl = document.getElementById('import-error');
+  errEl.textContent = '';
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls','csv'].includes(ext)) {
+    errEl.textContent = 'Sadece .xlsx, .xls veya .csv desteklenir.'; return;
+  }
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+    if (raw.length < 2) { errEl.textContent = 'Dosya boş veya yalnızca başlık satırı var.'; return; }
+
+    const headers = raw[0].map(h => String(h));
+    const colMap  = _detectMapping(headers);
+
+    if (!('name' in colMap)) {
+      errEl.textContent = '"Ürün Adı" sütunu bulunamadı. Şablonu indirip doğru başlıklarla doldurun.';
+      return;
+    }
+
+    const get    = (row, field) => colMap[field] !== undefined ? String(row[colMap[field]] ?? '').trim() : '';
+    const getNum = (row, field) => { const v = get(row, field).replace(',', '.'); return parseFloat(v) || 0; };
+
+    const rows = raw.slice(1)
+      .filter(row => row.some(c => String(c).trim() !== ''))
+      .map(row => {
+        const name = get(row, 'name');
+        if (!name) return null;
+        return {
+          name,
+          barcode:  get(row, 'barcode'),
+          category: get(row, 'category') || 'Genel',
+          depo:     get(row, 'depo'),
+          price:    getNum(row, 'price'),
+          cost:     getNum(row, 'cost'),
+          stock:    Math.max(0, Math.round(getNum(row, 'stock'))),
+          minStock: Math.max(0, Math.round(getNum(row, 'minStock'))),
+          sales7d:  Math.max(0, Math.round(getNum(row, 'sales7d'))),
+        };
+      })
+      .filter(Boolean);
+
+    if (rows.length === 0) { errEl.textContent = 'Geçerli ürün satırı bulunamadı.'; return; }
+
+    importRows = rows;
+    renderImportPreview(rows);
+    document.getElementById('import-step-1').style.display = 'none';
+    document.getElementById('import-step-2').style.display = '';
+  } catch (err) {
+    errEl.textContent = 'Dosya okunamadı: ' + (err.message || err);
+  }
+}
+
+function _findExisting(row) {
+  if (row.barcode) {
+    const m = products.find(p => p.barcode && p.barcode.toLowerCase() === row.barcode.toLowerCase());
+    if (m) return m;
+  }
+  return products.find(p => p.name.toLowerCase() === row.name.toLowerCase()) || null;
+}
+
+function renderImportPreview(rows) {
+  let newCount = 0, updateCount = 0;
+  rows.forEach(r => { _findExisting(r) ? updateCount++ : newCount++; });
+  document.getElementById('import-count-new').textContent    = newCount;
+  document.getElementById('import-count-update').textContent = updateCount;
+  document.getElementById('import-count-total').textContent  = rows.length;
+  const tbody   = document.getElementById('import-preview-body');
+  const preview = rows.slice(0, 25);
+  tbody.innerHTML = preview.map(row => {
+    const existing = _findExisting(row);
+    const actionHtml = existing
+      ? `<span style="color:var(--warning);font-weight:500">+${row.stock} stok</span>`
+      : `<span style="color:var(--success);font-weight:500">Yeni</span>`;
+    return `<tr>
+      <td>${escapeHtml(row.name)}</td>
+      <td style="color:var(--text-secondary)">${escapeHtml(row.barcode || '—')}</td>
+      <td>${escapeHtml(row.category)}</td>
+      <td style="text-align:right">${row.price > 0 ? fmtEUR(row.price) : '—'}</td>
+      <td style="text-align:right">${row.cost > 0 ? fmtEUR(row.cost) : '—'}</td>
+      <td style="text-align:right;font-weight:600">${row.stock}</td>
+      <td>${actionHtml}</td>
+    </tr>`;
+  }).join('');
+  if (rows.length > 25) {
+    tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:12px 10px">… ve ${rows.length - 25} satır daha</td></tr>`;
+  }
+}
+
+async function executeImport() {
+  if (importRows.length === 0) return;
+  const btn   = document.getElementById('import-confirm-btn');
+  const errEl = document.getElementById('import-error-2');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'İçe Aktarılıyor…';
+  let newCount = 0, updateCount = 0, skipCount = 0;
+  try {
+    const neededCats = [...new Set(importRows.map(r => r.category).filter(Boolean))];
+    for (const catName of neededCats) {
+      if (!categories.some(c => c.name.toLowerCase() === catName.toLowerCase())) {
+        const color = pickNextColor();
+        const { error } = await sb.from('categories').insert({ name: catName, color });
+        if (!error) categories.push({ name: catName, color });
+      }
+    }
+    const toInsert = [];
+    const seenKeys = new Set();
+    for (const row of importRows) {
+      try {
+        const existing = _findExisting(row);
+        if (existing) {
+          const oldExStock = existing.stock;
+          const newStock  = existing.stock + row.stock;
+          const newStatus = calcStatus({ ...existing, stock: newStock });
+          const upd = { stock: newStock, status: newStatus };
+          if (row.cost > 0)  upd.cost_price     = row.cost;
+          if (row.price > 0) upd.sale_price      = row.price;
+          if (row.depo)      upd.warehouse_info  = row.depo;
+          const { error } = await sb.from('products').update(upd).eq('id', existing.id);
+          if (error) throw error;
+          existing.stock = newStock; existing.status = newStatus;
+          if (row.cost > 0)  existing.cost  = row.cost;
+          if (row.price > 0) existing.price = row.price;
+          if (row.depo)      existing.depo  = row.depo;
+          updateCount++;
+          logMovement({ productId: existing.id, productName: existing.name, type: 'import', quantity: row.stock, oldStock: oldExStock, newStock });
+        } else {
+          const key = (row.barcode || '').toLowerCase() || row.name.toLowerCase();
+          if (seenKeys.has(key)) {
+            const queued = toInsert.find(r => (r.barcode?.toLowerCase() || r.name.toLowerCase()) === key);
+            if (queued) queued.stock += row.stock;
+          } else {
+            seenKeys.add(key);
+            toInsert.push({
+              name:           row.name,
+              barcode:        row.barcode || null,
+              category:       row.category,
+              cost_price:     row.cost,
+              sale_price:     row.price,
+              stock:          row.stock,
+              min_stock:      row.minStock,
+              sales7d:        row.sales7d,
+              status:         calcStatus({ stock: row.stock, minStock: row.minStock }),
+              warehouse_info: row.depo || null,
+              purchase_rate:  eurRate,
+            });
+          }
+        }
+      } catch (_) { skipCount++; }
+    }
+    const CHUNK = 50;
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const chunk = toInsert.slice(i, i + CHUNK);
+      const { data, error } = await sb.from('products').insert(chunk).select();
+      if (error) throw error;
+      const newProds = (data || []).map(dbToProduct);
+      products.push(...newProds);
+      newCount += chunk.length;
+      for (const np of newProds) {
+        logMovement({ productId: np.id, productName: np.name, type: 'import', quantity: np.stock, oldStock: 0, newStock: np.stock, newPrice: np.price, newCost: np.cost });
+      }
+    }
+    populateFilters();
+    renderAll();
+    document.getElementById('import-step-2').style.display = 'none';
+    document.getElementById('import-step-3').style.display = '';
+    document.getElementById('import-result-new').textContent    = newCount;
+    document.getElementById('import-result-update').textContent = updateCount;
+    document.getElementById('import-result-error').textContent  = skipCount;
+    const errRow = document.getElementById('import-result-error-row');
+    if (errRow) errRow.style.color = skipCount > 0 ? 'var(--error)' : 'var(--text-secondary)';
+  } catch (err) {
+    errEl.textContent = 'İçe aktarma hatası: ' + (err.message || err);
+  } finally {
+    btn.disabled = false; btn.textContent = 'İçe Aktar';
+  }
+}
+
+/* ===== STOK HAREKET GEÇMİŞİ ===== */
+async function openHistoryModal(productId = null) {
+  if (!canDo('view_history') && !isAdmin()) return;
+  historyProductId = productId || null;
+  const titleEl = document.getElementById('history-modal-title');
+  if (historyProductId) {
+    const p = products.find(x => x.id === historyProductId);
+    if (titleEl && p) titleEl.textContent = `Hareket Geçmişi — ${p.name}`;
+  } else {
+    if (titleEl) titleEl.textContent = 'Stok Hareket Geçmişi';
+  }
+  document.getElementById('history-filter-type').value = '';
+  document.getElementById('history-filter-search').value = '';
+  document.getElementById('history-modal').classList.add('visible');
+  await loadHistory();
+}
+function closeHistoryModal() {
+  document.getElementById('history-modal').classList.remove('visible');
+  historyProductId = null;
+  historyRows = [];
+}
+function closeHistoryOnOverlay(e) { if (e.target.id === 'history-modal') closeHistoryModal(); }
+
+async function loadHistory() {
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary)">Yükleniyor…</td></tr>';
+  try {
+    let q = sb.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(200);
+    if (historyProductId) q = q.eq('product_id', historyProductId);
+    const { data, error } = await q;
+    if (error) throw error;
+    historyRows = data || [];
+    renderHistory();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error)">${escapeHtml(String(e.message || e))}</td></tr>`;
+  }
+}
+
+function renderHistory() {
+  const tbody = document.getElementById('history-tbody');
+  const typeFilter = document.getElementById('history-filter-type').value;
+  const searchQ    = document.getElementById('history-filter-search').value.toLowerCase().trim();
+  let rows = historyRows;
+  if (typeFilter) rows = rows.filter(r => r.type === typeFilter);
+  if (searchQ)    rows = rows.filter(r => (r.product_name || '').toLowerCase().includes(searchQ));
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary)">Hareket kaydı bulunamadı</td></tr>';
+    return;
+  }
+  const TYPE_META = {
+    create:       { label: 'Oluşturuldu',     color: 'var(--success)' },
+    delete:       { label: 'Silindi',          color: 'var(--error)' },
+    in:           { label: '↑ Stok Girişi',    color: 'var(--success)' },
+    out:          { label: '↓ Stok Çıkışı',    color: 'var(--error)' },
+    sale:         { label: '🛒 Satış',          color: '#f97316' },
+    edit:         { label: 'Düzenlendi',        color: 'var(--accent)' },
+    price_change: { label: 'Fiyat Değişti',     color: 'var(--warning)' },
+    import:       { label: '↑ İçe Aktarıldı',  color: '#8b5cf6' },
+  };
+  tbody.innerHTML = rows.map(r => {
+    const meta = TYPE_META[r.type] || { label: r.type, color: 'var(--text-secondary)' };
+    const d = new Date(r.created_at);
+    const dateStr = d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    let stockHtml = '—';
+    if (r.old_stock !== null && r.new_stock !== null) {
+      const delta = r.new_stock - r.old_stock;
+      const sign = delta >= 0 ? '+' : '';
+      const col = delta >= 0 ? 'var(--success)' : 'var(--error)';
+      stockHtml = `<span style="color:${col};font-weight:600">${sign}${delta}</span> <span style="color:var(--text-secondary);font-size:11px">(${r.old_stock}→${r.new_stock})</span>`;
+    } else if (r.quantity) {
+      stockHtml = `<span style="color:var(--text-secondary)">${r.quantity} adet</span>`;
+    }
+    let detailHtml = escapeHtml(r.notes || '');
+    if (r.old_price !== null && r.new_price !== null && r.old_price !== r.new_price) {
+      detailHtml = `${fmtEUR(r.old_price)} → ${fmtEUR(r.new_price)}`;
+    } else if (!detailHtml && r.new_price) {
+      detailHtml = fmtEUR(r.new_price);
+    }
+    return `<tr>
+      <td style="white-space:nowrap;color:var(--text-secondary);font-size:11px">${dateStr}</td>
+      <td style="font-weight:500">${escapeHtml(r.product_name || '—')}</td>
+      <td style="font-size:11px;color:var(--text-secondary)">${escapeHtml(r.user_email || '—')}</td>
+      <td><span style="color:${meta.color};font-size:12px;font-weight:500">${meta.label}</span></td>
+      <td>${stockHtml}</td>
+      <td style="font-size:11px;color:var(--text-secondary);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${detailHtml || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ===== WINDOW BRIDGES ===== */
+window.loadData                  = loadData;
+window.populateFilters           = populateFilters;
+window.renderAll                 = renderAll;
+window.fetchAndUpdateEurRate     = fetchAndUpdateEurRate;
+window.openAddModal              = openAddModal;
+window.openEditModal             = openEditModal;
+window.closeProductModal         = closeProductModal;
+window.closeProductModalOnOverlay = closeProductModalOnOverlay;
+window.submitProductForm         = submitProductForm;
+window.openStockOutModal         = openStockOutModal;
+window.closeStockOutModal        = closeStockOutModal;
+window.closeStockOutOnOverlay    = closeStockOutOnOverlay;
+window.updateStockOutProfit      = updateStockOutProfit;
+window.submitStockOut            = submitStockOut;
+window.askDelete                 = askDelete;
+window.openCategoryModal         = openCategoryModal;
+window.closeCategoryModal        = closeCategoryModal;
+window.closeCategoryOnOverlay    = closeCategoryOnOverlay;
+window.submitNewCategory         = submitNewCategory;
+window.exportCSV                 = exportCSV;
+window.openImportModal           = openImportModal;
+window.closeImportModal          = closeImportModal;
+window.closeImportOnOverlay      = closeImportOnOverlay;
+window.goImportStep1             = goImportStep1;
+window.downloadImportTemplate    = downloadImportTemplate;
+window.handleImportFileDrop      = handleImportFileDrop;
+window.handleImportFileSelect    = handleImportFileSelect;
+window.executeImport             = executeImport;
+window.openHistoryModal          = openHistoryModal;
+window.closeHistoryModal         = closeHistoryModal;
+window.closeHistoryOnOverlay     = closeHistoryOnOverlay;
+window.renderHistory             = renderHistory;
+
+init();
+bootstrapAuth();
