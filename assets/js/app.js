@@ -462,7 +462,7 @@ export async function submitProductForm(e) {
       if (cost > 0) dup.cost = cost;
       if (depo)     dup.depo = depo;
       dup.purchaseRate = eurRate;
-      logAction('STOK_GİRİŞ', dup.name, dup.barcode || '', stock, `${dupReason} eşleşmesiyle stok artışı`);
+      logMovement({ productId: dup.id, productName: dup.name, type: 'in', quantity: stock, oldStock: newStock - stock, newStock, notes: 'Eşleşme ile stok artışı' });
       closeProductModal(); renderAll();
       toast(`"${dup.name}" — stok ${stock} adet artırıldı (${dupReason} eşleşti)`);
       return;
@@ -474,9 +474,10 @@ export async function submitProductForm(e) {
       const dbRow = productToDb({ ...p, name, barcode, category, stock, minStock, cost, price, depo });
       const { error } = await sb.from('products').update(dbRow).eq('id', editingId);
       if (error) throw error;
+      const oldStock = p.stock; const oldPrice = p.price;
       Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo });
       p.status = calcStatus(p);
-      logAction('ÜRÜN_GÜNCELLEME', name, barcode || '', stock, '');
+      logMovement({ productId: p.id, productName: name, type: 'edit', oldStock, newStock: stock, oldPrice, newPrice: price });
       toast('Ürün güncellendi');
     } else {
       const newPdata = { name, barcode, category, depo, cost, price: 0, stock, minStock, sales7d: 0, purchaseRate: eurRate };
@@ -484,7 +485,7 @@ export async function submitProductForm(e) {
       const { data, error } = await sb.from('products').insert(productToDb(newPdata)).select().single();
       if (error) throw error;
       products.push(dbToProduct(data));
-      logAction('ÜRÜN_EKLEME', name, barcode || '', stock, '');
+      logMovement({ productId: data.id, productName: name, type: 'create', quantity: stock, oldStock: 0, newStock: stock });
       toast('Ürün eklendi');
     }
     closeProductModal(); renderAll();
@@ -564,7 +565,7 @@ export async function submitStockOut(e) {
     const noteStr = salePrice > 0
       ? `Satış fiyatı: ${fmtEUR(salePrice)} × ${saleRate.toFixed(2)} = ${fmtTL(salePrice * saleRate)}`
       : '';
-    logAction('SATIŞ', p.name, p.barcode, qty, noteStr);
+    logMovement({ productId: p.id, productName: p.name, type: 'sale', quantity: qty, oldStock: prevStock, newStock, newPrice: salePrice, notes: noteStr });
     closeStockOutModal(); renderAll();
     toast(`${qty} adet stoktan düşüldü`);
   } catch (err) {
@@ -622,7 +623,7 @@ async function doDelete(id) {
     const p = products.find(x => x.id === id);
     const { error } = await sb.from('products').delete().eq('id', id);
     if (error) throw error;
-    logAction('ÜRÜN_SİLME', p?.name || '', p?.barcode || '', p?.stock || 0, '');
+    logMovement({ productId: id, productName: p?.name || '', type: 'delete', oldStock: p?.stock || 0, newStock: 0 });
     products = products.filter(x => x.id !== id);
     renderAll();
     toast('Ürün silindi');
