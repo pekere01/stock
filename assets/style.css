@@ -202,6 +202,61 @@
     padding: 24px;
   }
 
+  /* ===== ALERT BANNER ===== */
+  .alert-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0 14px;
+    flex-wrap: wrap;
+    animation: slideDown 0.25s ease;
+  }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .alert-banner-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  .alert-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 13px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    font-family: inherit;
+  }
+  .alert-chip:hover { opacity: 0.8; transform: translateY(-1px); }
+  .alert-chip.red {
+    background: rgba(239,68,68,0.12);
+    color: var(--error);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+  .alert-chip.amber {
+    background: rgba(245,158,11,0.10);
+    color: var(--warning);
+    border: 1px solid rgba(245,158,11,0.3);
+  }
+  .alert-chip-clear {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: inherit;
+    transition: color 0.15s;
+  }
+  .alert-chip-clear:hover { color: var(--text-primary); }
+
   header {
     display: flex;
     align-items: center;
@@ -547,6 +602,11 @@
   .stock-cell {
     display: flex;
     flex-direction: column;
+    gap: 4px;
+  }
+  .stock-row {
+    display: flex;
+    align-items: center;
     gap: 4px;
   }
   .stock-num { font-weight: 600; font-size: 13px; }

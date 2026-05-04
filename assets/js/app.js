@@ -309,7 +309,9 @@ function renderTable() {
         <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<span class="${marginCls}">%${margin.toFixed(1)}</span>`}</td>
         <td>
           <div class="stock-cell">
-            <span class="stock-num">${p.stock}</span>
+            <div class="stock-row">
+              <span class="stock-num">${p.stock}</span>
+            </div>
             <div class="stock-bar"><div class="stock-bar-fill ${barCls}" style="width:${stockPct}%"></div></div>
           </div>
         </td>
@@ -349,7 +351,39 @@ export function populateFilters() {
   if (currentFc && categories.some(c => c.name === currentFc)) fc.value = currentFc;
 }
 
+/* ===== ALERT BANNER ===== */
+function renderAlertBanner() {
+  const banner = document.getElementById('alert-banner');
+  const outCount = products.filter(p => calcStatus(p) === 'out_of_stock').length;
+  const lowCount = products.filter(p => calcStatus(p) === 'low_stock').length;
+  if (outCount === 0 && lowCount === 0) { banner.style.display = 'none'; return; }
+
+  let html = '<span class="alert-banner-label">Stok Uyarısı:</span>';
+  if (outCount > 0) {
+    html += `<button class="alert-chip red" onclick="filterByStatus('out_of_stock')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      ${outCount} ürün tükendi
+    </button>`;
+  }
+  if (lowCount > 0) {
+    html += `<button class="alert-chip amber" onclick="filterByStatus('low_stock')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      ${lowCount} ürün düşük stok
+    </button>`;
+  }
+  html += `<button class="alert-chip-clear" onclick="filterByStatus('')">Temizle ×</button>`;
+  banner.innerHTML = html;
+  banner.style.display = 'flex';
+}
+
+window.filterByStatus = function(status) {
+  document.getElementById('filter-status').value = status;
+  renderTable();
+  document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
 export function renderAll() {
+  renderAlertBanner();
   renderStats();
   renderPie();
   renderBar();
@@ -1227,6 +1261,7 @@ function renderHistory() {
     </tr>`;
   }).join('');
 }
+
 
 /* ===== WINDOW BRIDGES ===== */
 window.loadData                  = loadData;
