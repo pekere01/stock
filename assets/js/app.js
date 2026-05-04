@@ -462,6 +462,7 @@ export async function submitProductForm(e) {
       if (cost > 0) dup.cost = cost;
       if (depo)     dup.depo = depo;
       dup.purchaseRate = eurRate;
+      logAction('STOK_GİRİŞ', dup.name, dup.barcode || '', stock, `${dupReason} eşleşmesiyle stok artışı`);
       closeProductModal(); renderAll();
       toast(`"${dup.name}" — stok ${stock} adet artırıldı (${dupReason} eşleşti)`);
       return;
@@ -475,6 +476,7 @@ export async function submitProductForm(e) {
       if (error) throw error;
       Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo });
       p.status = calcStatus(p);
+      logAction('ÜRÜN_GÜNCELLEME', name, barcode || '', stock, '');
       toast('Ürün güncellendi');
     } else {
       const newPdata = { name, barcode, category, depo, cost, price: 0, stock, minStock, sales7d: 0, purchaseRate: eurRate };
@@ -482,6 +484,7 @@ export async function submitProductForm(e) {
       const { data, error } = await sb.from('products').insert(productToDb(newPdata)).select().single();
       if (error) throw error;
       products.push(dbToProduct(data));
+      logAction('ÜRÜN_EKLEME', name, barcode || '', stock, '');
       toast('Ürün eklendi');
     }
     closeProductModal(); renderAll();
@@ -616,9 +619,11 @@ export function askDelete(id) {
 }
 async function doDelete(id) {
   try {
+    const p = products.find(x => x.id === id);
     const { error } = await sb.from('products').delete().eq('id', id);
     if (error) throw error;
-    products = products.filter(p => p.id !== id);
+    logAction('ÜRÜN_SİLME', p?.name || '', p?.barcode || '', p?.stock || 0, '');
+    products = products.filter(x => x.id !== id);
     renderAll();
     toast('Ürün silindi');
   } catch (err) {
