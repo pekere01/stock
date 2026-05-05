@@ -1,0 +1,7 @@
+supabase/.temp/
+supabase/functions/**/graphify-out/
+graphify-out/
+assets/js/graphify-out/
+.claude/
+CLAUDE.md
+nul
