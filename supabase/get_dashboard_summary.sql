@@ -15,7 +15,7 @@ BEGIN
       'total_stock',
         COALESCE(SUM(stock), 0),
       'low_stock_count',
-        COUNT(*) FILTER (WHERE stock > 0 AND stock <= min_stock),
+        COUNT(*) FILTER (WHERE stock <= min_stock),
       'out_of_stock_count',
         COUNT(*) FILTER (WHERE stock = 0),
       'total_cost_value',

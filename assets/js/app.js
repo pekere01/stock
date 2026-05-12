@@ -169,7 +169,7 @@ function renderStats() {
   }
 
   animateCounter(document.getElementById('stat-low'), lowCount);
-  document.getElementById('stat-low-trend').textContent = lowCount > 0 ? `${lowCount} ürün acil aksiyon gerekli` : 'Tüm stoklar yeterli';
+  document.getElementById('stat-low-trend').textContent = lowCount > 0 ? `${lowCount.toLocaleString('tr-TR')} ürün acil aksiyon gerekli` : 'Tüm stoklar yeterli';
 
   if (viewOnly) {
     document.getElementById('stat-margin').textContent = '—';
@@ -462,20 +462,22 @@ export function populateFilters() {
 function renderAlertBanner() {
   const banner   = document.getElementById('alert-banner');
   const outCount = dashboardSummary?.out_of_stock_count ?? products.filter(p => calcStatus(p) === 'out_of_stock').length;
-  const lowCount = dashboardSummary?.low_stock_count    ?? products.filter(p => calcStatus(p) === 'low_stock').length;
-  if (outCount === 0 && lowCount === 0) { banner.style.display = 'none'; return; }
+  const lowCount = dashboardSummary?.low_stock_count    ?? products.filter(p => p.stock <= p.minStock).length;
+  // low_stock_count artık zero-stock'u içeriyor; banner'da çift saymamak için farkı göster
+  const belowMin = Math.max(0, lowCount - outCount);
+  if (outCount === 0 && belowMin === 0) { banner.style.display = 'none'; return; }
 
   let html = '<span class="alert-banner-label">Stok Uyarısı:</span>';
   if (outCount > 0) {
     html += `<button class="alert-chip red" onclick="filterByStatus('out_of_stock')">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      ${outCount} ürün tükendi
+      ${outCount.toLocaleString('tr-TR')} ürün tükendi
     </button>`;
   }
-  if (lowCount > 0) {
+  if (belowMin > 0) {
     html += `<button class="alert-chip amber" onclick="filterByStatus('low_stock')">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      ${lowCount} ürün düşük stok
+      ${belowMin.toLocaleString('tr-TR')} ürün düşük stok
     </button>`;
   }
   banner.innerHTML = html;
