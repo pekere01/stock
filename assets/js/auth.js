@@ -199,9 +199,12 @@ export async function bootstrapAuth() {
     if (event === 'SIGNED_OUT' || !session) {
       currentUser = null;
       exitApp();
-    } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    } else if (event === 'TOKEN_REFRESHED') {
       currentUser = session.user;
-      enterApp();
+    } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      const appVisible = !document.getElementById('app-root')?.classList.contains('hidden');
+      currentUser = session.user;
+      if (!appVisible) enterApp();
     }
   });
 }

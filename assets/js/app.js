@@ -21,6 +21,7 @@ let editingId = null;
 let stockOutId = null;
 let editingCategoryName = null;
 let eurRate = parseFloat(localStorage.getItem(EUR_RATE_KEY)) || 34.00;
+let dashboardSummary = null;
 
 /* import */
 let importRows = [];
@@ -87,27 +88,36 @@ function productToDb(p) {
   };
 }
 
-export async function loadData(page = 0) {
+export async function loadData(page = 0, recount = true) {
   if (!currentUser) return;
   currentPage = page;
   const from = page * PAGE_SIZE;
   const to   = from + PAGE_SIZE - 1;
   try {
-    const catsRes = await sb.from('categories').select('*').order('name', { ascending: true }).range(0, 1999);
-    if (catsRes.error) throw catsRes.error;
-    categories = (catsRes.data || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
-
     const safe = (pageSearch || '').replace(/[*%,()]/g, '');
-    let q = sb.from('products').select('*', { count: 'exact' }).order('created_at', { ascending: true });
+    const hasFilter = !!(safe || pageCatFilter || pageStatusFilter);
+    let q = sb.from('products')
+      .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' })
+      .order('created_at', { ascending: true });
     if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
     if (pageStatusFilter)  q = q.eq('status', pageStatusFilter);
     q = q.range(from, to);
 
-    const prodsRes = await q;
+    const [catsRes, prodsRes, rpcRes] = await Promise.all([
+      sb.from('categories').select('*').order('name', { ascending: true }).range(0, 1999),
+      q,
+      sb.rpc('get_dashboard_summary')
+    ]);
+    if (catsRes.error) throw catsRes.error;
     if (prodsRes.error) throw prodsRes.error;
+    categories = (catsRes.data || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
     products   = (prodsRes.data || []).map(dbToProduct);
-    totalCount = prodsRes.count ?? 0;
+    if (recount && hasFilter) totalCount = prodsRes.count ?? totalCount;
+    if (!rpcRes.error && rpcRes.data) {
+      dashboardSummary = rpcRes.data;
+      if (!hasFilter) totalCount = rpcRes.data.total_count ?? totalCount;
+    }
   } catch (err) {
     console.error('Veri yükleme hatası:', err.message || err);
     toast('Veriler yüklenemedi: ' + (err.message || err), 'error');
@@ -127,18 +137,21 @@ function pickNextColor() {
 
 /* ===== STATS ===== */
 function renderStats() {
-  const total = totalCount || products.length;
-  const totalQty = products.reduce((s, p) => s + (p.stock || 0), 0);
-  const stockValueEUR = products.reduce((s, p) => s + p.stock * (p.cost || 0), 0);
-  const lowCount = products.filter(p => p.stock <= p.minStock).length;
-  const margins = products.filter(p => p.price > 0).map(p => ((p.price - p.cost) / p.price) * 100);
-  const avgMargin = margins.length ? margins.reduce((s, x) => s + x, 0) / margins.length : 0;
+  const s             = dashboardSummary;
+  const total         = s?.total_count      ?? totalCount;
+  const totalQty      = s?.total_stock      ?? products.reduce((acc, p) => acc + (p.stock || 0), 0);
+  const stockValueEUR = s?.total_cost_value ?? products.reduce((acc, p) => acc + p.stock * (p.cost || 0), 0);
+  const lowCount      = s?.low_stock_count  ?? products.filter(p => p.stock <= p.minStock).length;
+  const avgMargin     = s?.avg_margin       ?? (() => {
+    const ms = products.filter(p => p.price > 0).map(p => ((p.price - p.cost) / p.price) * 100);
+    return ms.length ? ms.reduce((a, x) => a + x, 0) / ms.length : 0;
+  })();
   const priced = products.filter(p => p.price > 0);
   const avgUnitProfitTL = priced.length
-    ? priced.reduce((s, p) => {
+    ? priced.reduce((acc, p) => {
         const buyTL  = (p.cost  || 0) * (p.purchaseRate || eurRate);
         const sellTL = (p.price || 0) * (p.saleRate     || eurRate);
-        return s + (sellTL - buyTL);
+        return acc + (sellTL - buyTL);
       }, 0) / priced.length
     : 0;
 
@@ -151,7 +164,7 @@ function renderStats() {
     document.getElementById('stat-value-trend').textContent = 'Yetkisiz alan';
   } else {
     animateCounter(document.getElementById('stat-value'), stockValueEUR, 1500, v => fmtEURShort(v));
-    const stockRevenueEUR = products.reduce((s, p) => s + p.stock * (p.price || 0), 0);
+    const stockRevenueEUR = s?.total_sale_value ?? products.reduce((acc, p) => acc + p.stock * (p.price || 0), 0);
     document.getElementById('stat-value-trend').textContent = `TL eşd.: ${fmtTLShort(stockValueEUR * eurRate)} · Satış: ${fmtEURShort(stockRevenueEUR)}`;
   }
 
@@ -205,6 +218,70 @@ function renderPie() {
     const large = sliceAngle > Math.PI ? 1 : 0;
     const path = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${large} 0 ${ix2} ${iy2} Z`;
     const pct = ((d.value / total) * 100).toFixed(1);
+    html += `<path d="${path}" fill="${d.color}" stroke="#1a1a1a" stroke-width="2" class="pie-slice"
+      data-label="${d.label}" data-value="${d.value}" data-pct="${pct}"
+      style="transform-origin:${cx}px ${cy}px;transition:transform 0.2s ease;opacity:0;animation:pieIn 0.6s ease ${i * 0.1}s forwards;cursor:pointer;"></path>`;
+    cumAngle = endAngle;
+  });
+
+  html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" fill="#f5f5f5" font-size="28" font-weight="700">${total}</text>`;
+  html += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="11">Toplam Ürün</text>`;
+  html += `</svg>`;
+
+  if (!document.getElementById('pie-anim-style')) {
+    const s = document.createElement('style');
+    s.id = 'pie-anim-style';
+    s.textContent = `@keyframes pieIn{from{opacity:0;transform:scale(0.7) rotate(-45deg)}to{opacity:1;transform:scale(1) rotate(0)}} .pie-slice:hover{transform:scale(1.04)}`;
+    document.head.appendChild(s);
+  }
+
+  wrap.innerHTML = html;
+  legend.innerHTML = data.map(d => `
+    <div class="legend-item">
+      <span class="legend-color" style="background:${d.color}"></span>
+      <span>${d.label} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
+    </div>`).join('');
+
+  wrap.querySelectorAll('.pie-slice').forEach(el => {
+    el.addEventListener('mousemove', e => showTooltip(e, `${el.dataset.label}<br><b>${el.dataset.value} ürün</b> · ${el.dataset.pct}%`));
+    el.addEventListener('mouseleave', hideTooltip);
+  });
+}
+
+/* ===== PIE CHART (RPC — tüm 127k ürün) =====
+   DURUM: Pasif. Onay sonrası renderAll() içinde renderPie() ile değiştirilecek.
+   Aktivasyon: renderAll() içindeki renderPie() → renderPieFromSummary() */
+function renderPieFromSummary() {
+  const wrap   = document.getElementById('pie-wrap');
+  const legend = document.getElementById('pie-legend');
+  if (!dashboardSummary?.category_distribution) { renderPie(); return; }
+
+  const dist = dashboardSummary.category_distribution;
+  const data = dist
+    .map(d => ({ label: d.category, value: d.count, color: getCategoryColor(d.category) }))
+    .filter(d => d.value > 0);
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const size = 240, cx = size / 2, cy = size / 2, r = 95, ir = r * 0.6;
+  let html = `<svg viewBox="0 0 ${size} ${size}" width="100%" style="max-width:280px;margin:0 auto;display:block;">`;
+
+  if (total === 0) {
+    html += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="14">Veri yok</text></svg>`;
+    wrap.innerHTML = html;
+    legend.innerHTML = '';
+    return;
+  }
+
+  let cumAngle = -Math.PI / 2;
+  data.forEach((d, i) => {
+    const sliceAngle = (d.value / total) * Math.PI * 2;
+    const endAngle   = cumAngle + sliceAngle;
+    const x1  = cx + r  * Math.cos(cumAngle),  y1  = cy + r  * Math.sin(cumAngle);
+    const x2  = cx + r  * Math.cos(endAngle),   y2  = cy + r  * Math.sin(endAngle);
+    const ix1 = cx + ir * Math.cos(endAngle),   iy1 = cy + ir * Math.sin(endAngle);
+    const ix2 = cx + ir * Math.cos(cumAngle),   iy2 = cy + ir * Math.sin(cumAngle);
+    const large = sliceAngle > Math.PI ? 1 : 0;
+    const path  = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${large} 0 ${ix2} ${iy2} Z`;
+    const pct   = ((d.value / total) * 100).toFixed(1);
     html += `<path d="${path}" fill="${d.color}" stroke="#1a1a1a" stroke-width="2" class="pie-slice"
       data-label="${d.label}" data-value="${d.value}" data-pct="${pct}"
       style="transform-origin:${cx}px ${cy}px;transition:transform 0.2s ease;opacity:0;animation:pieIn 0.6s ease ${i * 0.1}s forwards;cursor:pointer;"></path>`;
@@ -382,9 +459,9 @@ export function populateFilters() {
 
 /* ===== ALERT BANNER ===== */
 function renderAlertBanner() {
-  const banner = document.getElementById('alert-banner');
-  const outCount = products.filter(p => calcStatus(p) === 'out_of_stock').length;
-  const lowCount = products.filter(p => calcStatus(p) === 'low_stock').length;
+  const banner   = document.getElementById('alert-banner');
+  const outCount = dashboardSummary?.out_of_stock_count ?? products.filter(p => calcStatus(p) === 'out_of_stock').length;
+  const lowCount = dashboardSummary?.low_stock_count    ?? products.filter(p => calcStatus(p) === 'low_stock').length;
   if (outCount === 0 && lowCount === 0) { banner.style.display = 'none'; return; }
 
   let html = '<span class="alert-banner-label">Stok Uyarısı:</span>';
@@ -415,7 +492,7 @@ window.filterByStatus = async function(status) {
 export function renderAll() {
   renderAlertBanner();
   renderStats();
-  renderPie();
+  renderPieFromSummary();
   renderBar();
   renderTable();
 }
@@ -965,7 +1042,7 @@ function init() {
 window.goPage = async function(page) {
   const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
   if (page < 0 || page >= totalPages) return;
-  await loadData(page);
+  await loadData(page, false);
   renderAll();
   document.querySelector('.table-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
