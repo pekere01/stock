@@ -1,4 +1,4 @@
-import { sb, sbAdmin } from './supabase.js';
+import { sb } from './supabase.js';
 
 export const SUPER_ADMIN_EMAIL = 'teknik@soncag.com';
 

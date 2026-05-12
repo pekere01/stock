@@ -371,7 +371,6 @@ function renderAlertBanner() {
       ${lowCount} ürün düşük stok
     </button>`;
   }
-  html += `<button class="alert-chip-clear" onclick="filterByStatus('')">Temizle ×</button>`;
   banner.innerHTML = html;
   banner.style.display = 'flex';
 }

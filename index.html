@@ -322,11 +322,7 @@
         <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Yeni Kullanıcı Oluştur</div>
         <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">Oluşturulan kullanıcı varsayılan olarak <strong style="color:var(--text-primary)">Görüntüleme</strong> yetkisiyle başlar. Yetkileri daha sonra Kullanıcılar sekmesinden düzenleyebilirsin.</div>
       </div>
-      <div id="create-user-service-warn" style="display:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:12px;color:#f59e0b;line-height:1.6;">
-        <strong>Service Role Key Eksik</strong><br>
-        Admin panelinden kullanıcı oluşturmak için Supabase service_role anahtarını koda eklemen gerekiyor.<br>
-        <span style="opacity:.8;">Supabase Dashboard → Settings → API → "service_role" → kopyala → index.html'deki <code>SUPABASE_SERVICE_KEY</code> sabitine yapıştır.</span>
-      </div>
+      <div id="create-user-service-warn" style="display:none;"></div>
       <form id="create-user-form" onsubmit="handleCreateUser(event)">
         <div class="form-grid" style="margin-bottom:14px;">
           <div class="form-field full">

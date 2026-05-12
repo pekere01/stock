@@ -1,6 +1,15 @@
-import { sb, sbAdmin } from './supabase.js';
+import { sb } from './supabase.js';
 import { currentUser, SUPER_ADMIN_EMAIL, PERM_DEFS, DEFAULT_PERMISSIONS, STATIC_NAMES } from './auth.js';
 import { toast, showConfirm, escapeHtml } from './ui.js';
+
+async function adminInvoke(action, payload = {}) {
+  const { data, error } = await sb.functions.invoke('admin-operations', {
+    body: { action, ...payload }
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
 
 let adminCurrentTab = 'users';
 let editingPermUserId = null;
@@ -159,19 +168,14 @@ export async function saveUserDetail(e) {
       .update({ email: newEmail, permissions: updatedPerms, receives_email_alerts: !!editingUserDetail.receivesAlerts })
       .eq('user_id', editingUserDetail.userId);
     if (permErr) throw permErr;
-    if (sbAdmin) {
-      const authPayload = { email: newEmail };
-      if (newPassword) authPayload.password = newPassword;
-      const { error: authErr } = await sbAdmin.auth.admin.updateUserById(editingUserDetail.userId, authPayload);
-      if (authErr) throw authErr;
-    }
+    const authPayload = { email: newEmail };
+    if (newPassword) authPayload.password = newPassword;
+    await adminInvoke('update_user', { userId: editingUserDetail.userId, ...authPayload });
     editingUserDetail.email = newEmail;
     editingUserDetail.permData = updatedPerms;
     document.getElementById('user-detail-title').textContent = newName || newEmail;
     document.getElementById('ud-password').value = '';
-    const msg = (!sbAdmin && newPassword)
-      ? 'İsim ve e-posta güncellendi. Şifre güncellemek için service role key gerekli.'
-      : 'Kullanıcı bilgileri başarıyla güncellendi.';
+    const msg = 'Kullanıcı bilgileri başarıyla güncellendi.';
     succEl.textContent = msg;
     succEl.style.display = '';
     toast('Kullanıcı güncellendi');
@@ -298,14 +302,10 @@ export function askDeleteUser(userId, email) {
         const { error } = await sb.from('user_permissions').delete().eq('user_id', userId);
         if (error) dbErrMsg = error.message; else dbOk = true;
       } catch (e) { dbErrMsg = e.message || String(e); }
-      if (sbAdmin) {
-        try {
-          const { error } = await sbAdmin.auth.admin.deleteUser(userId);
-          if (error) authErrMsg = error.message; else authOk = true;
-        } catch (e) { authErrMsg = e.message || String(e); }
-      } else {
-        authErrMsg = 'Service role key tanımlı değil';
-      }
+      try {
+        await adminInvoke('delete_user', { userId });
+        authOk = true;
+      } catch (e) { authErrMsg = e.message || String(e); }
       loadAdminUsers();
       if (dbOk && authOk)        toast(`${email} tamamen silindi`);
       else if (dbOk && !authOk)  toast(`DB silindi — Auth hatası: ${authErrMsg}`, 'error');
@@ -317,7 +317,7 @@ export function askDeleteUser(userId, email) {
 
 export function onCreateUserTabOpen() {
   const warn = document.getElementById('create-user-service-warn');
-  if (warn) warn.style.display = sbAdmin ? 'none' : '';
+  if (warn) warn.style.display = 'none';
   document.getElementById('cu-error').textContent = '';
   document.getElementById('cu-success').style.display = 'none';
   document.getElementById('cu-success').textContent = '';
@@ -330,7 +330,6 @@ export async function handleCreateUser(e) {
   const submitBtn = document.getElementById('cu-submit-btn');
   errEl.textContent = '';
   succEl.style.display = 'none';
-  if (!sbAdmin) { errEl.textContent = 'Service role key ayarlanmamış. Sayfanın üstündeki uyarıya bak.'; return; }
   const fullName = document.getElementById('cu-name').value.trim();
   const email    = document.getElementById('cu-email').value.trim();
   const password = document.getElementById('cu-password').value;
@@ -340,11 +339,8 @@ export async function handleCreateUser(e) {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Oluşturuluyor...';
   try {
-    const { data, error } = await sbAdmin.auth.admin.createUser({
-      email, password, email_confirm: true, user_metadata: { full_name: fullName }
-    });
-    if (error) throw error;
-    const newUserId = data.user.id;
+    const result = await adminInvoke('create_user', { email, password, fullName });
+    const newUserId = result.userId;
     const perms = { ...DEFAULT_PERMISSIONS, _name: fullName };
     const { error: permErr } = await sb.from('user_permissions').upsert({
       user_id: newUserId, email, role: 'user', permissions: perms,
