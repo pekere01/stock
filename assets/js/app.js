@@ -315,8 +315,8 @@ function renderPieFromSummary() {
 /* ===== BAR CHART ===== */
 function renderBar() {
   const wrap = document.getElementById('bar-wrap');
-  const top = [...products].sort((a, b) => b.sales7d - a.sales7d).slice(0, 8);
-  if (top.length === 0 || top[0].sales7d === 0) {
+  const top = dashboardSummary?.top_sales ?? [];
+  if (top.length === 0) {
     wrap.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);">Satış verisi yok</div>`;
     return;
   }
@@ -341,9 +341,10 @@ function renderBar() {
     const x = pad.l + i * stepX + gap / 2;
     const y = pad.t + innerH - barH;
     const shortName = p.name.length > 14 ? p.name.slice(0, 12) + '…' : p.name;
+    const color = CATEGORY_PALETTE[i % CATEGORY_PALETTE.length];
     html += `<rect x="${x}" y="${pad.t + innerH}" width="${barW}" height="0" rx="4"
-      fill="${getCategoryColor(p.category)}" class="bar-rect"
-      data-label="${p.name}" data-value="${p.sales7d}"
+      fill="${color}" class="bar-rect"
+      data-label="${escapeHtml(p.name)}" data-value="${p.sales7d}"
       style="cursor:pointer;transition:fill 0.2s;">
       <animate attributeName="height" from="0" to="${barH}" dur="0.8s" begin="${i * 0.07}s" fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1"/>
       <animate attributeName="y" from="${pad.t + innerH}" to="${y}" dur="0.8s" begin="${i * 0.07}s" fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1"/>

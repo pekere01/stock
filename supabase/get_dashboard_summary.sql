@@ -19,9 +19,9 @@ BEGIN
       'out_of_stock_count',
         COUNT(*) FILTER (WHERE stock = 0),
       'total_cost_value',
-        COALESCE(SUM(stock * cost_price), 0),
+        COALESCE(SUM(stock * COALESCE(cost_price, 0)), 0),
       'total_sale_value',
-        COALESCE(SUM(stock * sale_price), 0),
+        COALESCE(SUM(stock * COALESCE(sale_price, 0)), 0),
       'avg_margin',
         COALESCE(
           AVG((sale_price - cost_price) / NULLIF(sale_price, 0) * 100)
@@ -42,6 +42,23 @@ BEGIN
             FROM products
             GROUP BY category
           ) sub
+        ),
+      'top_sales',
+        (
+          SELECT COALESCE(
+            json_agg(
+              json_build_object('name', name, 'sales7d', sales7d)
+              ORDER BY sales7d DESC
+            ),
+            '[]'::json
+          )
+          FROM (
+            SELECT name, sales7d
+            FROM products
+            WHERE sales7d > 0
+            ORDER BY sales7d DESC
+            LIMIT 8
+          ) top
         )
     )
     FROM products
