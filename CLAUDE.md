@@ -15,6 +15,20 @@
 
 ---
 
+## 📄 SAYFALAMA KURALI (Değiştirilemez)
+
+> **KURAL:** `app.js` içinde client-side filtreleme **yasaktır.**
+> `products.filter(...)` ile arama veya durum filtresi uygulanamaz.
+> Tüm filtreleme `loadData(page)` içinde Supabase'e devredilir:
+> - Arama → `.or('name.ilike.%X%,barcode.ilike.%X%')`
+> - Kategori → `.eq('category', pageCatFilter)`
+> - Durum → `.eq('status', pageStatusFilter)`
+> - Sayfa → `.range(from, to)` + `.select('*', { count: 'exact' })`
+>
+> Bkz. [[Pagination-Mimarisi]]
+
+---
+
 ## ⚠️ GÜVENLİK KURALLARI (Değiştirilemez)
 
 > **KURAL 1:** `SUPABASE_SERVICE_ROLE_KEY` (service_role JWT) **asla istemci tarafında barındırılamaz.**
