@@ -82,8 +82,8 @@ export async function loadData() {
   if (!currentUser) return;
   try {
     const [prodsRes, catsRes] = await Promise.all([
-      sb.from('products').select('*').order('created_at', { ascending: true }),
-      sb.from('categories').select('*').order('name', { ascending: true })
+      sb.from('products').select('*').order('created_at', { ascending: true }).range(0, 4999),
+      sb.from('categories').select('*').order('name', { ascending: true }).range(0, 1999)
     ]);
     if (prodsRes.error) throw prodsRes.error;
     if (catsRes.error)  throw catsRes.error;

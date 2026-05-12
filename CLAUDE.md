@@ -1,5 +1,20 @@
 # Stok Yonetim Dashboard — Blueprint
 
+## ⚙️ VERİTABANI & SORGU STANDARTLARI
+
+> **KURAL:** Supabase sorgularında `.select('*')` tek başına kullanılamaz.
+> PostgREST varsayılan limiti **1000 satır**'dır — bu değeri aşan veriler sessizce kırpılır, hata vermez.
+>
+> **Zorunlu kalıp:** Büyük tablolar için `.range()` ekle:
+> ```js
+> sb.from('products').select('*').order(...).range(0, 4999)   // 5000 ürün
+> sb.from('categories').select('*').order(...).range(0, 1999)  // 2000 kategori
+> ```
+>
+> Bkz. [[Supabase-Limitleri]]
+
+---
+
 ## ⚠️ GÜVENLİK KURALLARI (Değiştirilemez)
 
 > **KURAL 1:** `SUPABASE_SERVICE_ROLE_KEY` (service_role JWT) **asla istemci tarafında barındırılamaz.**
