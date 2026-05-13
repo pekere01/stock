@@ -94,11 +94,11 @@ function productToDb(p) {
     name:           p.name,
     barcode:        p.barcode   || null,
     category:       p.category,
-    cost_price:     p.cost      || 0,
-    sale_price:     p.price     || 0,
-    stock:          p.stock     || 0,
-    min_stock:      p.minStock  || 0,
-    sales7d:        p.sales7d   || 0,
+    cost_price:     Number(p.cost)     || 0,
+    sale_price:     Number(p.price)    || 0,
+    stock:          Number(p.stock)    || 0,
+    min_stock:      Number(p.minStock) || 0,
+    sales7d:        Number(p.sales7d)  || 0,
     status:         p.status    || 'active',
     warehouse_info: p.depo      || null,
     purchase_rate:  p.purchaseRate || null,
@@ -121,7 +121,9 @@ export async function loadData(page = 0, recount = true) {
       .order('created_at', { ascending: true });
     if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
-    if (pageStatusFilter)  q = q.eq('status', pageStatusFilter);
+    if (pageStatusFilter === 'out_of_stock') q = q.lte('stock', 0);
+    else if (pageStatusFilter === 'low_stock') q = q.gt('stock', 0).lte('stock', 5);
+    else if (pageStatusFilter === 'active')    q = q.gt('stock', 0);
     q = q.range(from, to);
 
     const [catsRes, prodsRes, rpcRes] = await Promise.all([
@@ -555,6 +557,8 @@ export function openEditModal(id) {
   document.getElementById('f-price').value   = p.price > 0 ? p.price : '';
   document.getElementById('form-error').textContent = '';
   document.getElementById('price-field-wrapper').style.display = '';
+  const stockField = document.getElementById('f-stock').closest('.form-field');
+  if (stockField) stockField.style.display = isAdmin() ? '' : 'none';
   document.getElementById('product-modal').classList.add('visible');
 }
 export function closeProductModal() { document.getElementById('product-modal').classList.remove('visible'); }
