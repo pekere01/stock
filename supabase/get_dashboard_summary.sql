@@ -10,7 +10,7 @@ AS $$
 BEGIN
   RETURN (
     SELECT json_build_object(
-      'total_count',
+      'total_products',
         COUNT(*),
       'total_stock',
         COALESCE(SUM(stock), 0),
