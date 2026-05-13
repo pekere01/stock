@@ -11,6 +11,41 @@ Format: `## [YYYY-MM-DD] eylem | Özet`
 
 ---
 
+## [2026-05-14] guvenlik-bugfix | Filtre zincirleri AND bağlacıyla bağlandı, veri tipleri (Number) sanitize edildi ve Edit Modal'da stok inputu admin olmayanlardan tamamen gizlendi
+
+- **Filtre Zinciri (Query Chaining):** `loadData()` içinde `pageStatusFilter` artık DB `status` string'i yerine stok sayısıyla karşılaştırılıyor — `out_of_stock` → `.lte('stock', 0)`, `low_stock` → `.gt('stock', 0).lte('stock', 5)`, `active` → `.gt('stock', 0)`; tüm filtreler (arama + kategori + durum) AND zinciriyle Supabase'e iletiliyor
+- **Veri Tipi Güvenliği:** `productToDb()` fonksiyonu içinde `cost_price`, `sale_price`, `stock`, `min_stock`, `sales7d` alanları `Number()` ile açıkça sayıya çevriliyor — string olarak gitmesi durumunda `<= 5` gibi sayısal filtrelerin bozulması engellendi
+- **RBAC Görünmezlik (UI Hide):** `openEditModal()` içinde `isAdmin()` kontrolü eklendi — admin olmayan kullanıcı "Düzenle" modalını açtığında "Stok Adedi" input ve label'ı DOM'da `display: none` yapılıyor; admin ise her zamanki gibi görünüyor
+
+---
+
+## [2026-05-14] performans-mimari | Veritabanına B-Tree indeksleri atıldı, Realtime (Debounce ile) entegre edildi ve exact-count yükü kaldırılarak pagination optimize edildi
+
+- `idx_products_id`, `idx_products_category`, `idx_products_name` B-Tree indeksleri Supabase'e eklendi
+- `setupRealtime()` fonksiyonu yazıldı: `sb.channel('public:products')` → `postgres_changes` dinler, 500ms debounce ile `loadData + renderAll` tetikler
+- `loadData()` içinden `count: 'exact'` kaldırıldı; yalnızca metin arama aktifken (`hasTextSearch`) kullanılır; normal sayfa geçişleri RPC `total_count` üzerinden çalışır
+- `renderTable()` `DocumentFragment` kullanımına geçirildi: `tbody.innerHTML=''` + tek `appendChild(fragment)` ile DOM thrashing önlendi
+
+---
+
+## [2026-05-12] dashboard-senkronizasyon | Banner ve Stat kartları RPC üzerinden 0-stok dahil olacak şekilde eşlendi
+
+- SQL `low_stock_count`: `stock > 0 AND stock <= min_stock` → `stock <= min_stock` (sıfır-stok artık dahil)
+- `renderAlertBanner`: `belowMin = low_stock_count - out_of_stock_count` ile çift sayım önlendi; sayılar `toLocaleString('tr-TR')` ile biçimlendi
+- `renderStats` stat kartı artık doğru toplamı (tükenen + düşük stok) gösteriyor
+- SQL production'a deploy edildi, `stok/CLAUDE.md`'ye Dashboard İstatistik Kuralı eklendi
+
+---
+
+## [2026-05-12] dashboard-rpc-fix | Dashboard stok değeri NULL bypass edildi ve satış grafiği global RPC verisine bağlandı
+
+- `get_dashboard_summary` SQL fonksiyonu güncellendi: `SUM(stock * COALESCE(cost_price, 0))` — NULL maliyet artık 0 sayılıyor, Toplam Stok Değeri doğru hesaplanıyor
+- `top_sales` alanı RPC'ye eklendi: `sales7d > 0` filtreli, `ORDER BY sales7d DESC LIMIT 8` — sadece gerçek satışlılar listeleniyor
+- `app.js renderBar()` yeniden yazıldı: `products[]` yerine `dashboardSummary.top_sales` kaynağı; `top_sales` boşsa "Satış verisi yok" gösteriliyor, 0-değerli çubuk yok
+- SQL Supabase production'a deploy edildi (`supabase db query --linked`)
+
+---
+
 ## [2026-05-12] edge-function-deploy | admin-operations Edge Function production'a deploy edildi
 
 **Güvenlik & Altyapı tamamlandı:**
