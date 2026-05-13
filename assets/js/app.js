@@ -136,7 +136,7 @@ export async function loadData(page = 0, recount = true) {
     if (recount && hasTextSearch) totalCount = prodsRes.count ?? totalCount;
     if (!rpcRes.error && rpcRes.data) {
       dashboardSummary = rpcRes.data;
-      if (!hasFilter) totalCount = rpcRes.data.total_count ?? totalCount;
+      if (!hasFilter) totalCount = rpcRes.data.total_products ?? totalCount;
     }
   } catch (err) {
     console.error('Veri yükleme hatası:', err.message || err);
@@ -158,7 +158,7 @@ function pickNextColor() {
 /* ===== STATS ===== */
 function renderStats() {
   const s             = dashboardSummary;
-  const total         = s?.total_count      ?? totalCount;
+  const total         = s?.total_products    ?? totalCount;
   const totalQty      = s?.total_stock      ?? products.reduce((acc, p) => acc + (p.stock || 0), 0);
   const stockValueEUR = s?.total_cost_value ?? products.reduce((acc, p) => acc + p.stock * (p.cost || 0), 0);
   const lowCount      = s?.low_stock_count  ?? products.filter(p => p.stock <= p.minStock).length;
