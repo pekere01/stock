@@ -51,6 +51,24 @@ let pageCatFilter    = '';
 let pageStatusFilter = '';
 let _searchTimer     = null;
 
+/* ===== REALTIME ===== */
+let _realtimeChannel = null;
+let _realtimeTimer   = null;
+
+function setupRealtime() {
+  if (_realtimeChannel) return;
+  _realtimeChannel = sb
+    .channel('public:products')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+      clearTimeout(_realtimeTimer);
+      _realtimeTimer = setTimeout(async () => {
+        await loadData(currentPage, false);
+        renderAll();
+      }, 500);
+    })
+    .subscribe();
+}
+
 /* ===== DB HELPERS ===== */
 function dbToProduct(row) {
   return {
@@ -90,14 +108,16 @@ function productToDb(p) {
 
 export async function loadData(page = 0, recount = true) {
   if (!currentUser) return;
+  setupRealtime();
   currentPage = page;
   const from = page * PAGE_SIZE;
   const to   = from + PAGE_SIZE - 1;
   try {
-    const safe = (pageSearch || '').replace(/[*%,()]/g, '');
-    const hasFilter = !!(safe || pageCatFilter || pageStatusFilter);
+    const safe          = (pageSearch || '').replace(/[*%,()]/g, '');
+    const hasTextSearch = !!safe;
+    const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter);
     let q = sb.from('products')
-      .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' })
+      .select('*', (recount && hasTextSearch) ? { count: 'exact' } : { count: 'none' })
       .order('created_at', { ascending: true });
     if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
@@ -113,7 +133,7 @@ export async function loadData(page = 0, recount = true) {
     if (prodsRes.error) throw prodsRes.error;
     categories = (catsRes.data || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
     products   = (prodsRes.data || []).map(dbToProduct);
-    if (recount && hasFilter) totalCount = prodsRes.count ?? totalCount;
+    if (recount && hasTextSearch) totalCount = prodsRes.count ?? totalCount;
     if (!rpcRes.error && rpcRes.data) {
       dashboardSummary = rpcRes.data;
       if (!hasFilter) totalCount = rpcRes.data.total_count ?? totalCount;
@@ -396,14 +416,17 @@ function renderTable() {
     return;
   }
   const viewOnly = isViewOnly();
-  tbody.innerHTML = list.map((p, idx) => {
-    const status   = calcStatus(p);
-    const margin   = p.price > 0 ? ((p.price - p.cost) / p.price) * 100 : 0;
+  const fragment = document.createDocumentFragment();
+  list.forEach((p, idx) => {
+    const status    = calcStatus(p);
+    const margin    = p.price > 0 ? ((p.price - p.cost) / p.price) * 100 : 0;
     const marginCls = margin > 40 ? 'margin-good' : margin > 20 ? 'margin-mid' : 'margin-bad';
-    const stockPct = p.minStock > 0 ? Math.min(100, (p.stock / p.minStock) * 100) : 100;
-    const barCls   = p.stock === 0 ? 'bad' : p.stock <= p.minStock ? 'mid' : 'good';
-    return `
-      <tr class="${status}" style="animation-delay:${idx * 0.02}s">
+    const stockPct  = p.minStock > 0 ? Math.min(100, (p.stock / p.minStock) * 100) : 100;
+    const barCls    = p.stock === 0 ? 'bad' : p.stock <= p.minStock ? 'mid' : 'good';
+    const tr = document.createElement('tr');
+    tr.className = status;
+    tr.style.animationDelay = `${idx * 0.02}s`;
+    tr.innerHTML = `
         <td>
           <div class="product-name">${escapeHtml(p.name)}</div>
           <div class="product-barcode">${escapeHtml(p.barcode)}</div>
@@ -438,9 +461,11 @@ function renderTable() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             </button>` : ''}
           </div>
-        </td>
-      </tr>`;
-  }).join('');
+        </td>`;
+    fragment.appendChild(tr);
+  });
+  tbody.innerHTML = '';
+  tbody.appendChild(fragment);
   renderPaginationControls();
 }
 
