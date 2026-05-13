@@ -121,9 +121,7 @@ export async function loadData(page = 0, recount = true) {
       .order('created_at', { ascending: true });
     if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
-    if (pageStatusFilter === 'out_of_stock') q = q.lte('stock', 0);
-    else if (pageStatusFilter === 'low_stock') q = q.gt('stock', 0).lte('stock', 5);
-    else if (pageStatusFilter === 'active')    q = q.gt('stock', 0);
+    if (pageStatusFilter) q = q.eq('status', pageStatusFilter);
     q = q.range(from, to);
 
     const [catsRes, prodsRes, rpcRes] = await Promise.all([
