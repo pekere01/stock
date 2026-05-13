@@ -11,6 +11,14 @@ Format: `## [YYYY-MM-DD] eylem | Özet`
 
 ---
 
+## [2026-05-14] mimari-bugfix | Frontend filtrelemesindeki hardcode (stock <= 5) mantığı silindi, SQL ile uyumlu şekilde doğrudan DB'deki 'status' kolonuna bağlandı
+
+- `loadData()` içindeki `.lte('stock', 0)` / `.gt('stock', 0).lte('stock', 5)` / `.gt('stock', 0)` statik filtreleri kaldırıldı
+- Yerine tek satır: `if (pageStatusFilter) q = q.eq('status', pageStatusFilter);`
+- Artık filtreleme tamamen veritabanındaki `status` kolonuna (active / low_stock / out_of_stock) dayanıyor; `get_dashboard_summary` SQL fonksiyonuyla tam uyumlu
+
+---
+
 ## [2026-05-14] guvenlik-bugfix | Filtre zincirleri AND bağlacıyla bağlandı, veri tipleri (Number) sanitize edildi ve Edit Modal'da stok inputu admin olmayanlardan tamamen gizlendi
 
 - **Filtre Zinciri (Query Chaining):** `loadData()` içinde `pageStatusFilter` artık DB `status` string'i yerine stok sayısıyla karşılaştırılıyor — `out_of_stock` → `.lte('stock', 0)`, `low_stock` → `.gt('stock', 0).lte('stock', 5)`, `active` → `.gt('stock', 0)`; tüm filtreler (arama + kategori + durum) AND zinciriyle Supabase'e iletiliyor
