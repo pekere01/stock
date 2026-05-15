@@ -23,7 +23,7 @@ export let currentDisplayName = '';
 export let currentPermissions = null;
 
 export function isAdmin() {
-  return currentUser?.email === SUPER_ADMIN_EMAIL || currentPermissions?.admin === true;
+  return currentUser?.email === SUPER_ADMIN_EMAIL;
 }
 
 export function canDo(action) {

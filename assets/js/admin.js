@@ -58,7 +58,7 @@ export async function loadAdminUsers() {
       return;
     }
     const isSuperAdminSession = currentUser?.email === SUPER_ADMIN_EMAIL;
-    const visibleData = isSuperAdminSession ? data : data.filter(u => u.email !== SUPER_ADMIN_EMAIL);
+    const visibleData = isSuperAdminSession ? data : data.filter(u => u.role !== 'admin');
     tbody.innerHTML = visibleData.map(u => {
       const isSuperAdmin = u.email === SUPER_ADMIN_EMAIL;
       const perms = { ...DEFAULT_PERMISSIONS, ...(u.permissions || {}) };
@@ -70,8 +70,8 @@ export async function loadAdminUsers() {
         const tagClass = isAdminPerm ? (isSuperAdmin ? 'admin-tag' : 'manager-tag') : (on ? 'on' : 'off');
         return `<span class="perm-tag ${tagClass}">${label}</span>`;
       }).join('');
-      const roleLabel = isSuperAdmin ? '<span class="role-badge admin">Admin</span>'
-                      : perms.admin  ? '<span class="role-badge manager">Yönetici</span>'
+      const roleLabel = u.role === 'admin'   ? '<span class="role-badge admin">Admin</span>'
+                      : u.role === 'manager' ? '<span class="role-badge manager">Yönetici</span>'
                       : '<span class="role-badge user">Kullanıcı</span>';
       const createdAt = u.created_at ? new Date(u.created_at).toLocaleDateString('tr-TR') : '—';
       const isSelf = u.user_id === currentUser?.id;
@@ -276,7 +276,7 @@ export async function savePermissions() {
   if (!editingPermUserId) return;
   try {
     const { error } = await sb.from('user_permissions')
-      .update({ permissions: editingPermData, role: editingPermData.admin ? 'admin' : 'user', receives_email_alerts: editingReceivesAlerts })
+      .update({ permissions: editingPermData, role: editingPermData.admin ? 'manager' : 'user', receives_email_alerts: editingReceivesAlerts })
       .eq('user_id', editingPermUserId);
     if (error) throw error;
     closePermModal();

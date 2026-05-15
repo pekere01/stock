@@ -1,5 +1,5 @@
 import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
-import { currentUser, isAdmin, canDo, isViewOnly, logAction, bootstrapAuth } from './auth.js';
+import { currentUser, currentPermissions, isAdmin, canDo, isViewOnly, logAction, bootstrapAuth } from './auth.js';
 import {
   fmtTL, fmtTLShort, fmtEUR, fmtEURShort,
   escapeHtml, animateCounter, calcStatus, statusLabel,
@@ -455,7 +455,7 @@ function renderTable() {
             ${canDo('add_products') ? `<button class="icon-btn" title="Düzenle" onclick="openEditModal(${p.id})">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
             </button>` : ''}
-            ${isAdmin() ? `<button class="icon-btn danger" title="Sil" onclick="askDelete(${p.id})">
+            ${(isAdmin() || currentPermissions?.admin) ? `<button class="icon-btn danger" title="Sil" onclick="askDelete(${p.id})">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
             </button>` : ''}
             ${canDo('view_history') ? `<button class="icon-btn" title="Hareket Geçmişi" onclick="openHistoryModal(${p.id})" style="opacity:0.7">
@@ -557,7 +557,7 @@ export function openEditModal(id) {
   document.getElementById('form-error').textContent = '';
   document.getElementById('price-field-wrapper').style.display = '';
   const stockField = document.getElementById('f-stock').closest('.form-field');
-  if (stockField) stockField.style.display = isAdmin() ? '' : 'none';
+  if (stockField) stockField.style.display = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
   document.getElementById('product-modal').classList.add('visible');
 }
 export function closeProductModal() { document.getElementById('product-modal').classList.remove('visible'); }
