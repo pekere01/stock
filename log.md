@@ -11,6 +11,8 @@ Format: `## [YYYY-MM-DD] eylem | Özet`
 
 ---
 
+## [2026-05-15] bugfix | Yönetim paneli butonu görünürlük şartı Süper Admin ve Yöneticileri (Manager) kapsayacak şekilde güncellendi.
+
 ## [2026-05-15] güvenlik-yetki | Admin ve Manager rolleri ayrıştırıldı. Ürün silme ve edit panelinden manuel stok miktarı değiştirme yetkileri hem admin hem manager rollerine tanımlandı.
 
 ## [2026-05-14] mantık-güncellemesi | 'Aktif' durum filtresi artık hem normal aktif ürünleri hem de düşük stoklu ürünleri kapsayacak şekilde genişletildi
