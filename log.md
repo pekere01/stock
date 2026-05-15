@@ -11,6 +11,24 @@ Format: `## [YYYY-MM-DD] eylem | Özet`
 
 ---
 
+## [2026-05-15] güvenlik-yetki | Admin ve Manager rolleri ayrıştırıldı. Ürün silme ve edit panelinden manuel stok miktarı değiştirme yetkileri hem admin hem manager rollerine tanımlandı.
+
+## [2026-05-14] mantık-güncellemesi | 'Aktif' durum filtresi artık hem normal aktif ürünleri hem de düşük stoklu ürünleri kapsayacak şekilde genişletildi
+
+- `loadData()` satır 124: `pageStatusFilter === 'active'` → `.in('status', ['active', 'low_stock'])`
+- Diğer filtreler (low_stock, out_of_stock) kendi değerlerinde kalmaya devam ediyor
+
+---
+
+## [2026-05-14] bugfix | RPC `total_products` verisi JS tarafındaki totalCount değişkenine bağlandı, pagination kilitleri açıldı
+
+- SQL `get_dashboard_summary`: `'total_count'` → `'total_products'` (SQL + Supabase production redeploy)
+- JS `loadData()` satır 139: `rpcRes.data.total_count` → `rpcRes.data.total_products`
+- JS `renderStats()` satır 161: `s?.total_count` → `s?.total_products`
+- Doğrulama: RPC çıktısı `"total_products": 46541` → 931 sayfa → "Sonraki" butonu aktif
+
+---
+
 ## [2026-05-14] mimari-bugfix | Frontend filtrelemesindeki hardcode (stock <= 5) mantığı silindi, SQL ile uyumlu şekilde doğrudan DB'deki 'status' kolonuna bağlandı
 
 - `loadData()` içindeki `.lte('stock', 0)` / `.gt('stock', 0).lte('stock', 5)` / `.gt('stock', 0)` statik filtreleri kaldırıldı
