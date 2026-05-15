@@ -240,7 +240,7 @@ function renderPie() {
     const path = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${large} 0 ${ix2} ${iy2} Z`;
     const pct = ((d.value / total) * 100).toFixed(1);
     html += `<path d="${path}" fill="${d.color}" stroke="#1a1a1a" stroke-width="2" class="pie-slice"
-      data-label="${d.label}" data-value="${d.value}" data-pct="${pct}"
+      data-label="${escapeHtml(d.label)}" data-value="${d.value}" data-pct="${pct}"
       style="transform-origin:${cx}px ${cy}px;transition:transform 0.2s ease;opacity:0;animation:pieIn 0.6s ease ${i * 0.1}s forwards;cursor:pointer;"></path>`;
     cumAngle = endAngle;
   });
@@ -260,7 +260,7 @@ function renderPie() {
   legend.innerHTML = data.map(d => `
     <div class="legend-item">
       <span class="legend-color" style="background:${d.color}"></span>
-      <span>${d.label} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
+      <span>${escapeHtml(d.label)} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
     </div>`).join('');
 
   wrap.querySelectorAll('.pie-slice').forEach(el => {
@@ -304,7 +304,7 @@ function renderPieFromSummary() {
     const path  = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${large} 0 ${ix2} ${iy2} Z`;
     const pct   = ((d.value / total) * 100).toFixed(1);
     html += `<path d="${path}" fill="${d.color}" stroke="#1a1a1a" stroke-width="2" class="pie-slice"
-      data-label="${d.label}" data-value="${d.value}" data-pct="${pct}"
+      data-label="${escapeHtml(d.label)}" data-value="${d.value}" data-pct="${pct}"
       style="transform-origin:${cx}px ${cy}px;transition:transform 0.2s ease;opacity:0;animation:pieIn 0.6s ease ${i * 0.1}s forwards;cursor:pointer;"></path>`;
     cumAngle = endAngle;
   });
@@ -324,7 +324,7 @@ function renderPieFromSummary() {
   legend.innerHTML = data.map(d => `
     <div class="legend-item">
       <span class="legend-color" style="background:${d.color}"></span>
-      <span>${d.label} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
+      <span>${escapeHtml(d.label)} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
     </div>`).join('');
 
   wrap.querySelectorAll('.pie-slice').forEach(el => {

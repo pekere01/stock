@@ -3,8 +3,7 @@ import { sb } from './supabase.js';
 export const SUPER_ADMIN_EMAIL = 'teknik@soncag.com';
 
 export const STATIC_NAMES = {
-  'teknik@soncag.com': 'admin',
-  '01aeker01@gmail.com': 'Arda'
+  'teknik@soncag.com': 'admin'
 };
 
 export const PERM_DEFS = [
