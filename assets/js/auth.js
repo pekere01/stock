@@ -85,7 +85,7 @@ export async function loadUserPermissions() {
 function applyPermissions() {
   const adminBtn = document.getElementById('admin-panel-btn');
   const addBtn   = document.getElementById('add-product-btn');
-  if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
+  if (adminBtn) adminBtn.style.display = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
   if (addBtn)   addBtn.style.display   = canDo('add_products') ? '' : 'none';
 }
 
