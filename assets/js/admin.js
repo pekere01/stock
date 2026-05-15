@@ -20,6 +20,10 @@ let editingUserDetail = null;
 export function openAdminPanel() {
   document.getElementById('main-dashboard').classList.add('hidden');
   document.getElementById('admin-panel').classList.remove('hidden');
+  const adminTitleBadge = document.querySelector('.admin-panel-title .admin-badge');
+  if (adminTitleBadge) {
+    adminTitleBadge.textContent = currentUser?.email === SUPER_ADMIN_EMAIL ? 'ADMIN' : 'YÖNETİCİ';
+  }
   switchAdminTab('users');
   loadAdminUsers();
 }
