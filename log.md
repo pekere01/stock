@@ -11,6 +11,8 @@ Format: `## [YYYY-MM-DD] eylem | Özet`
 
 ---
 
+## [2026-05-15] ui-güncelleme | Yönetim paneli başlığındaki rol badge'i Süper Admin için ADMIN, Yöneticiler için YÖNETİCİ olacak şekilde dinamik hale getirildi.
+
 ## [2026-05-15] bugfix | Yönetim paneli butonu görünürlük şartı Süper Admin ve Yöneticileri (Manager) kapsayacak şekilde güncellendi.
 
 ## [2026-05-15] güvenlik-yetki | Admin ve Manager rolleri ayrıştırıldı. Ürün silme ve edit panelinden manuel stok miktarı değiştirme yetkileri hem admin hem manager rollerine tanımlandı.
