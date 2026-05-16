@@ -11,6 +11,8 @@ Format: `## [YYYY-MM-DD] eylem | Özet`
 
 ---
 
+## [2026-05-16] özellik | PDF e-fatura okuma modülü eklendi. pdfjs-dist CDN ile client-side parse; `\b\d{7}\b` Regex ile Iscar ürün kodları ve adetleri ayıklanıyor, Supabase products tablosundan otomatik stok düşülüyor ve `logMovement` ile hareket geçmişine kaydediliyor.
+
 ## [2026-05-15] ui-güncelleme | Yönetim paneli başlığındaki rol badge'i Süper Admin için ADMIN, Yöneticiler için YÖNETİCİ olacak şekilde dinamik hale getirildi.
 
 ## [2026-05-15] bugfix | Yönetim paneli butonu görünürlük şartı Süper Admin ve Yöneticileri (Manager) kapsayacak şekilde güncellendi.
