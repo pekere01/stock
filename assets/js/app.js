@@ -1067,6 +1067,7 @@ function init() {
       closeHistoryModal();
     }
   });
+  document.getElementById('invoice-file-input')?.addEventListener('change', handleInvoiceUpload);
 }
 
 /* ===== PAGINATION BRIDGE ===== */
@@ -1100,6 +1101,127 @@ async function logMovement({ productId, productName, type, quantity = 0, oldStoc
   } catch (e) {
     console.warn('logMovement failed:', e);
   }
+}
+
+/* ===== E-FATURA PDF OKUMA ===== */
+async function handleInvoiceUpload(e) {
+  if (!canDo('make_sales')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (file.type !== 'application/pdf') { toast('Lütfen geçerli bir PDF yükleyin', 'error'); return; }
+
+  const textEl = document.getElementById('invoice-btn-text');
+  const labelEl = document.getElementById('invoice-upload-label');
+  if (textEl) textEl.textContent = '⏳ Okunuyor…';
+  if (labelEl) labelEl.style.pointerEvents = 'none';
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      let prevY = null;
+      let line = '';
+      const lines = [];
+      for (const item of content.items) {
+        const y = Math.round(item.transform[5]);
+        if (prevY !== null && prevY !== y) {
+          if (line.trim()) lines.push(line.trim());
+          line = '';
+        }
+        line += item.str;
+        prevY = y;
+      }
+      if (line.trim()) lines.push(line.trim());
+      fullText += lines.join('\n') + '\n';
+    }
+
+    const items = extractInvoiceItems(fullText);
+    if (items.length === 0) { toast('Faturada tanımlı ürün kodu bulunamadı', 'error'); return; }
+
+    const { updated, notFound } = await applyInvoiceStock(items);
+    const msg = `${updated} ürün stoktan düşüldü${notFound > 0 ? ` · ${notFound} kod sistemde bulunamadı` : ''}`;
+    toast(msg, updated > 0 ? 'success' : 'error');
+    await loadData(currentPage);
+    renderAll();
+  } catch (err) {
+    console.error('Invoice parse error:', err);
+    toast('PDF okunamadı: ' + (err.message || err), 'error');
+  } finally {
+    if (textEl) textEl.textContent = 'Fatura Yükle';
+    if (labelEl) labelEl.style.pointerEvents = '';
+  }
+}
+
+function extractInvoiceItems(text) {
+  const lines = text.split('\n');
+  const itemMap = new Map();
+
+  for (let i = 0; i < lines.length; i++) {
+    const codeMatch = lines[i].match(/\b(\d{7})\b/);
+    if (!codeMatch) continue;
+    const barcode = codeMatch[1];
+
+    // Aynı satırda ya da sonraki 2 satırda miktar + Adet ara
+    const searchText = lines.slice(i, i + 3).join(' ');
+    const qtyMatch = searchText.match(/\b(\d{1,4})\s+(?:[Aa][Dd][Ee][Tt]|[Mm][Ii][Kk][Tt][Aa][Rr])\b/);
+    if (!qtyMatch) continue;
+
+    const qty = parseInt(qtyMatch[1], 10);
+    if (qty <= 0 || qty > 9999) continue;
+    itemMap.set(barcode, (itemMap.get(barcode) || 0) + qty);
+  }
+
+  return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
+}
+
+async function applyInvoiceStock(items) {
+  let updated = 0, notFound = 0;
+
+  for (const { barcode, qty } of items) {
+    const { data, error } = await sb
+      .from('products')
+      .select('id, name, stock, min_stock, sales7d')
+      .eq('barcode', barcode)
+      .single();
+
+    if (error || !data) { notFound++; continue; }
+
+    const oldStock  = data.stock ?? 0;
+    const newStock  = Math.max(0, oldStock - qty);
+    const newSales7d = (data.sales7d || 0) + qty;
+    const newStatus = calcStatus({ stock: newStock, minStock: data.min_stock ?? 0 });
+
+    const { error: upErr } = await sb.from('products').update({
+      stock:   newStock,
+      sales7d: newSales7d,
+      status:  newStatus
+    }).eq('id', data.id);
+
+    if (upErr) { notFound++; continue; }
+
+    const local = products.find(p => p.id === data.id);
+    if (local) { local.stock = newStock; local.sales7d = newSales7d; local.status = newStatus; }
+
+    logMovement({
+      productId:   data.id,
+      productName: data.name,
+      type:        'sale',
+      quantity:    qty,
+      oldStock,
+      newStock,
+      notes:       'E-Fatura ile otomatik stoktan düşüldü'
+    });
+    updated++;
+  }
+
+  return { updated, notFound };
 }
 
 /* ===== CSV IMPORT ===== */
