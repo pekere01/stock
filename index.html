@@ -170,32 +170,59 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Ürün Ekle
         </button>
-        <button class="btn btn-secondary" onclick="openCategoryModal()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-          Kategorileri Yönet
-        </button>
-        <button class="btn btn-secondary" onclick="exportCSV()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          CSV İndir
-        </button>
-        <button class="btn btn-secondary" id="import-btn" onclick="openImportModal()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 14 12 9 17 14"></polyline><line x1="12" y1="9" x2="12" y2="21"></line></svg>
-          İçe Aktar
-        </button>
-        <button class="btn btn-secondary" id="history-btn" onclick="openHistoryModal()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Geçmiş
-        </button>
-        <label class="btn btn-secondary" id="invoice-in-label" title="Alım faturası — stok artar" style="cursor:pointer;margin:0;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          <span id="invoice-in-text">Alım Faturası</span>
-          <input type="file" id="invoice-file-in" accept=".pdf" style="display:none">
-        </label>
-        <label class="btn btn-secondary" id="invoice-sale-label" title="Satış faturası — stok düşer" style="cursor:pointer;margin:0;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 14 12 9 7 14"></polyline><line x1="12" y1="9" x2="12" y2="21"></line></svg>
-          <span id="invoice-sale-text">Satış Faturası</span>
-          <input type="file" id="invoice-file-sale" accept=".pdf" style="display:none">
-        </label>
+
+        <div class="dropdown" id="dropdown-tools">
+          <button class="btn btn-secondary dropdown-trigger" onclick="toggleDropdown('tools')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            İşlemler
+            <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="dropdown-menu">
+            <button class="dropdown-item" onclick="openCategoryModal();closeDropdowns()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              Kategorileri Yönet
+            </button>
+            <button class="dropdown-item" id="history-btn" onclick="openHistoryModal();closeDropdowns()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              Geçmiş
+            </button>
+            <div class="dropdown-separator"></div>
+            <button class="dropdown-item" onclick="exportCSV();closeDropdowns()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              CSV İndir
+            </button>
+            <button class="dropdown-item" id="import-btn" onclick="openImportModal();closeDropdowns()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 14 12 9 17 14"></polyline><line x1="12" y1="9" x2="12" y2="21"></line></svg>
+              CSV İçe Aktar
+            </button>
+          </div>
+        </div>
+
+        <div class="dropdown" id="dropdown-invoice">
+          <button class="btn btn-secondary dropdown-trigger" onclick="toggleDropdown('invoice')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            Fatura Yükle
+            <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="dropdown-menu">
+            <label class="dropdown-item invoice-item" id="invoice-in-label" style="cursor:pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <div class="dropdown-item-content">
+                <span id="invoice-in-text" class="dropdown-item-title">Alım Faturası</span>
+                <span class="dropdown-item-sub">Stok artar · çoklu PDF</span>
+              </div>
+              <input type="file" id="invoice-file-in" accept=".pdf" multiple style="display:none">
+            </label>
+            <label class="dropdown-item invoice-item" id="invoice-sale-label" style="cursor:pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 14 12 9 7 14"></polyline><line x1="12" y1="9" x2="12" y2="21"></line></svg>
+              <div class="dropdown-item-content">
+                <span id="invoice-sale-text" class="dropdown-item-title">Satış Faturası</span>
+                <span class="dropdown-item-sub">Stok düşer · çoklu PDF</span>
+              </div>
+              <input type="file" id="invoice-file-sale" accept=".pdf" multiple style="display:none">
+            </label>
+          </div>
+        </div>
       </div>
     </div>
 

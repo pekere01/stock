@@ -1058,6 +1058,7 @@ function init() {
   catList.addEventListener('blur', handleCategoryListBlur, true);
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      closeDropdowns();
       closeProductModal();
       closeConfirmModal();
       closeStockOutModal();
@@ -1069,6 +1070,18 @@ function init() {
   });
   document.getElementById('invoice-file-in')?.addEventListener('change',   e => handleInvoiceUpload(e, 'in'));
   document.getElementById('invoice-file-sale')?.addEventListener('change', e => handleInvoiceUpload(e, 'sale'));
+  document.addEventListener('click', e => { if (!e.target.closest('.dropdown')) closeDropdowns(); });
+}
+
+/* ===== DROPDOWN ===== */
+function toggleDropdown(id) {
+  document.querySelectorAll('.dropdown').forEach(d => {
+    if (d.id !== `dropdown-${id}`) d.classList.remove('open');
+  });
+  document.getElementById(`dropdown-${id}`)?.classList.toggle('open');
+}
+function closeDropdowns() {
+  document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
 }
 
 /* ===== PAGINATION BRIDGE ===== */
@@ -1107,49 +1120,50 @@ async function logMovement({ productId, productName, type, quantity = 0, oldStoc
 /* ===== E-FATURA PDF OKUMA ===== */
 async function handleInvoiceUpload(e, mode) {
   if (!canDo('make_sales')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
-  const file = e.target.files[0];
+  const files = Array.from(e.target.files).filter(f => f.type === 'application/pdf');
   e.target.value = '';
-  if (!file) return;
-  if (file.type !== 'application/pdf') { toast('Lütfen geçerli bir PDF yükleyin', 'error'); return; }
+  if (!files.length) { toast('Lütfen en az bir PDF yükleyin', 'error'); return; }
 
   const textEl  = document.getElementById(mode === 'in' ? 'invoice-in-text'   : 'invoice-sale-text');
   const labelEl = document.getElementById(mode === 'in' ? 'invoice-in-label'  : 'invoice-sale-label');
-  if (textEl) textEl.textContent = '⏳ Okunuyor…';
+  if (textEl) textEl.textContent = `⏳ ${files.length} dosya okunuyor…`;
   if (labelEl) labelEl.style.pointerEvents = 'none';
 
   try {
-    const arrayBuffer = await file.arrayBuffer();
     const pdfjsLib = window['pdfjs-dist/build/pdf'];
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      let prevY = null;
-      let line = '';
-      const lines = [];
-      for (const item of content.items) {
-        const y = Math.round(item.transform[5]);
-        if (prevY !== null && prevY !== y) {
-          if (line.trim()) lines.push(line.trim());
-          line = '';
+    const aggregateMap = new Map();
+    for (const file of files) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        let prevY = null, line = '';
+        const lines = [];
+        for (const item of content.items) {
+          const y = Math.round(item.transform[5]);
+          if (prevY !== null && prevY !== y) { if (line.trim()) lines.push(line.trim()); line = ''; }
+          line += item.str;
+          prevY = y;
         }
-        line += item.str;
-        prevY = y;
+        if (line.trim()) lines.push(line.trim());
+        fullText += lines.join('\n') + '\n';
       }
-      if (line.trim()) lines.push(line.trim());
-      fullText += lines.join('\n') + '\n';
+      for (const { barcode, qty } of extractInvoiceItems(fullText)) {
+        aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+      }
     }
 
-    const items = extractInvoiceItems(fullText);
-    if (items.length === 0) { toast('Faturada tanımlı ürün kodu bulunamadı', 'error'); return; }
+    const items = Array.from(aggregateMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
+    if (!items.length) { toast('Faturalarda tanımlı ürün kodu bulunamadı', 'error'); return; }
 
     const { updated, notFound } = await applyInvoiceStock(items, mode);
-    const verb = mode === 'in' ? 'stoka eklendi' : 'stoktan düşüldü';
-    const msg  = `${updated} ürün ${verb}${notFound > 0 ? ` · ${notFound} kod sistemde bulunamadı` : ''}`;
-    toast(msg, updated > 0 ? 'success' : 'error');
+    const verb     = mode === 'in' ? 'stoka eklendi' : 'stoktan düşüldü';
+    const fileInfo = files.length > 1 ? `${files.length} fatura işlendi · ` : '';
+    toast(`${fileInfo}${updated} kalem ${verb}${notFound > 0 ? ` · ${notFound} kod bulunamadı` : ''}`, updated > 0 ? 'success' : 'error');
     await loadData(currentPage);
     renderAll();
   } catch (err) {
@@ -1566,6 +1580,8 @@ function renderHistory() {
 
 
 /* ===== WINDOW BRIDGES ===== */
+window.toggleDropdown            = toggleDropdown;
+window.closeDropdowns            = closeDropdowns;
 window.loadData                  = loadData;
 window.populateFilters           = populateFilters;
 window.renderAll                 = renderAll;
