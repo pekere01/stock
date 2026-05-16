@@ -1067,7 +1067,8 @@ function init() {
       closeHistoryModal();
     }
   });
-  document.getElementById('invoice-file-input')?.addEventListener('change', handleInvoiceUpload);
+  document.getElementById('invoice-file-in')?.addEventListener('change',   e => handleInvoiceUpload(e, 'in'));
+  document.getElementById('invoice-file-sale')?.addEventListener('change', e => handleInvoiceUpload(e, 'sale'));
 }
 
 /* ===== PAGINATION BRIDGE ===== */
@@ -1104,15 +1105,15 @@ async function logMovement({ productId, productName, type, quantity = 0, oldStoc
 }
 
 /* ===== E-FATURA PDF OKUMA ===== */
-async function handleInvoiceUpload(e) {
+async function handleInvoiceUpload(e, mode) {
   if (!canDo('make_sales')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
   if (file.type !== 'application/pdf') { toast('Lütfen geçerli bir PDF yükleyin', 'error'); return; }
 
-  const textEl = document.getElementById('invoice-btn-text');
-  const labelEl = document.getElementById('invoice-upload-label');
+  const textEl  = document.getElementById(mode === 'in' ? 'invoice-in-text'   : 'invoice-sale-text');
+  const labelEl = document.getElementById(mode === 'in' ? 'invoice-in-label'  : 'invoice-sale-label');
   if (textEl) textEl.textContent = '⏳ Okunuyor…';
   if (labelEl) labelEl.style.pointerEvents = 'none';
 
@@ -1145,8 +1146,9 @@ async function handleInvoiceUpload(e) {
     const items = extractInvoiceItems(fullText);
     if (items.length === 0) { toast('Faturada tanımlı ürün kodu bulunamadı', 'error'); return; }
 
-    const { updated, notFound } = await applyInvoiceStock(items);
-    const msg = `${updated} ürün stoktan düşüldü${notFound > 0 ? ` · ${notFound} kod sistemde bulunamadı` : ''}`;
+    const { updated, notFound } = await applyInvoiceStock(items, mode);
+    const verb = mode === 'in' ? 'stoka eklendi' : 'stoktan düşüldü';
+    const msg  = `${updated} ürün ${verb}${notFound > 0 ? ` · ${notFound} kod sistemde bulunamadı` : ''}`;
     toast(msg, updated > 0 ? 'success' : 'error');
     await loadData(currentPage);
     renderAll();
@@ -1154,7 +1156,7 @@ async function handleInvoiceUpload(e) {
     console.error('Invoice parse error:', err);
     toast('PDF okunamadı: ' + (err.message || err), 'error');
   } finally {
-    if (textEl) textEl.textContent = 'Fatura Yükle';
+    if (textEl) textEl.textContent = mode === 'in' ? 'Alım Faturası' : 'Satış Faturası';
     if (labelEl) labelEl.style.pointerEvents = '';
   }
 }
@@ -1181,8 +1183,9 @@ function extractInvoiceItems(text) {
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
 }
 
-async function applyInvoiceStock(items) {
+async function applyInvoiceStock(items, mode) {
   let updated = 0, notFound = 0;
+  const isSale = mode === 'sale';
 
   for (const { barcode, qty } of items) {
     const { data, error } = await sb
@@ -1193,10 +1196,10 @@ async function applyInvoiceStock(items) {
 
     if (error || !data) { notFound++; continue; }
 
-    const oldStock  = data.stock ?? 0;
-    const newStock  = Math.max(0, oldStock - qty);
-    const newSales7d = (data.sales7d || 0) + qty;
-    const newStatus = calcStatus({ stock: newStock, minStock: data.min_stock ?? 0 });
+    const oldStock   = data.stock ?? 0;
+    const newStock   = isSale ? Math.max(0, oldStock - qty) : oldStock + qty;
+    const newSales7d = isSale ? (data.sales7d || 0) + qty : (data.sales7d || 0);
+    const newStatus  = calcStatus({ stock: newStock, minStock: data.min_stock ?? 0 });
 
     const { error: upErr } = await sb.from('products').update({
       stock:   newStock,
@@ -1212,11 +1215,11 @@ async function applyInvoiceStock(items) {
     logMovement({
       productId:   data.id,
       productName: data.name,
-      type:        'sale',
+      type:        isSale ? 'sale' : 'in',
       quantity:    qty,
       oldStock,
       newStock,
-      notes:       'E-Fatura ile otomatik stoktan düşüldü'
+      notes:       isSale ? 'E-Fatura ile otomatik stoktan düşüldü' : 'E-Fatura ile otomatik stok girişi'
     });
     updated++;
   }
