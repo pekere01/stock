@@ -1168,16 +1168,25 @@ async function handleInvoiceUpload(e, mode) {
       }
 
       // Strateji 2: Gömülü UBL XML attachment (Türk e-fatura standardı)
-      console.log('[PDF] Text boş, XML attachment deneniyor...');
       const attachments = await pdf.getAttachments();
+      let xmlFound = false;
       if (attachments) {
         for (const att of Object.values(attachments)) {
           const xmlText = new TextDecoder('utf-8').decode(att.content);
-          console.log('[PDF] Attachment bulundu, ilk 200 karakter:', xmlText.slice(0, 200));
-          for (const { barcode, qty } of extractInvoiceItemsFromXml(xmlText)) {
-            aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+          if (xmlText.includes('InvoiceLine') || xmlText.includes('InvoicedQuantity')) {
+            xmlFound = true;
+            for (const { barcode, qty } of extractInvoiceItemsFromXml(xmlText)) {
+              aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+            }
           }
         }
+      }
+      if (xmlFound) continue;
+
+      // Strateji 3: Ham PDF stream decompression (Form XObject içindeki text)
+      console.log('[PDF] Ham stream analizi başlıyor...');
+      for (const { barcode, qty } of await extractFromRawPdfStreams(arrayBuffer)) {
+        aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
       }
     }
 
@@ -1236,6 +1245,63 @@ function extractInvoiceItemsFromXml(xmlText) {
   }
   console.log('[XML] Bulunan kalemler:', [...itemMap.entries()]);
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
+}
+
+async function extractFromRawPdfStreams(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const allStrings = [];
+
+  // latin1 ile 1:1 byte→char dönüşümü (konum bozulmaz)
+  let raw = '';
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    raw += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+  }
+
+  // Her stream...endstream bloğunu bul ve decompress et
+  let pos = 0;
+  while (pos < raw.length) {
+    const si = raw.indexOf('stream', pos);
+    if (si === -1) break;
+    let cs = si + 6;
+    if (raw[cs] === '\r') cs++;
+    if (raw[cs] === '\n') cs++;
+    const ei = raw.indexOf('endstream', cs);
+    if (ei === -1) break;
+
+    const streamBytes = bytes.slice(cs, ei);
+    for (const fmt of ['deflate', 'deflate-raw']) {
+      try {
+        const ds = new DecompressionStream(fmt);
+        const w = ds.writable.getWriter();
+        w.write(streamBytes); w.close();
+        const r = ds.readable.getReader();
+        const chunks = [];
+        while (true) { const { done, value } = await r.read(); if (done) break; chunks.push(value); }
+        const total = chunks.reduce((s, c) => s + c.length, 0);
+        const merged = new Uint8Array(total);
+        let off = 0; for (const c of chunks) { merged.set(c, off); off += c.length; }
+        const decoded = new TextDecoder('latin1').decode(merged);
+        // Sadece printable ASCII ağırlıklı içeriği al (binary değil)
+        const printable = (decoded.match(/[\x20-\x7E]/g) || []).length / decoded.length;
+        if (printable > 0.5) {
+          // PDF string literal'larını çıkar: (metin)
+          const strRe = /\(([^)\\]{1,200})\)/g;
+          let m;
+          while ((m = strRe.exec(decoded)) !== null) {
+            const s = m[1].trim();
+            if (s) allStrings.push(s);
+          }
+        }
+        break;
+      } catch (_) {}
+    }
+    pos = ei + 9;
+  }
+
+  console.log('[RAW] Çıkarılan string sayısı:', allStrings.length, '| Örnek:', allStrings.slice(0, 10));
+  // Stringleri sırayla birleştirip extractInvoiceItems ile işle
+  return extractInvoiceItems(allStrings.join(' '));
 }
 
 async function applyInvoiceStock(items, mode) {
