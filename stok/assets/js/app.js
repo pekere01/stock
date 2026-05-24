@@ -1130,8 +1130,8 @@ async function handleInvoiceUpload(e, mode) {
   if (labelEl) labelEl.style.pointerEvents = 'none';
 
   try {
-    const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.mjs';
 
     const aggregateMap = new Map();
     for (const file of files) {
