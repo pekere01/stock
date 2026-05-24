@@ -17,35 +17,6 @@ graphify-out/
 assets/js/graphify-out/
 supabase/functions/**/graphify-out/
 
-# Obsidian vault sistemi
-.obsidian/
-
-# Vault dizinleri (blueprint şablonları, sadece lokalde)
-ai-chatbot-widget/
-analytics-dashboard/
-email-kampanya-yoneticisi/
-fatura-olusturucu/
-fiyat-hesaplayici/
-lead-scraper-panel/
-portfolio-site-builder/
-qr-menu/
-randevu-sistemi/
-restoran/
-thumbnail-olusturucu/
-urun-aciklama-yazici/
-video-icerik-uretici/
-workflow-builder/
-
-# PDF ve medya dosyaları
-*.pdf
-*.jfif
-*.jpg
-*.png
-*.jpeg
-
-# Aider geliştirme araçları
-.aider*
-
 # IDE
 .vscode/
 
