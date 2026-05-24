@@ -11,6 +11,8 @@ Format: `## [YYYY-MM-DD] eylem | Özet`
 
 ---
 
+## [2026-05-25] ui-temizliği | Fatura dropdown menüsündeki 'Stok artar · çoklu PDF' ve 'Stok düşer · çoklu PDF' alt açıklamaları kaldırılarak arayüz daha minimalist hale getirildi.
+
 ## [2026-05-16] ui-ux | Buton barı 21st.dev standartlarına göre Dropdown menülerle sadeleştirildi. İşlemler ve Fatura Yükle dropdown'larına toplandı, tek Ürün Ekle primary buton kaldı. Özellik: Fatura yükleme modülüne çoklu PDF (multiple upload) desteği ve aggregated toast eklendi.
 
 ## [2026-05-16] özellik | PDF e-fatura okuma modülü eklendi. pdfjs-dist CDN ile client-side parse; `\b\d{7}\b` Regex ile Iscar ürün kodları ve adetleri ayıklanıyor, Supabase products tablosundan otomatik stok düşülüyor ve `logMovement` ile hareket geçmişine kaydediliyor.
@@ -211,3 +213,22 @@ Commit: `930ef79` — push: `github.com/pekere01/stock`
 - [[index]] oluşturuldu — tüm projeleri, API referanslarını ve community notlarını haritalar
 - [[log]] oluşturuldu — bu dosya
 - Vault artık [[CLAUDE.md]] Master Architect protokolü altında yönetiliyor
+
+---
+
+## [2026-05-18] n8n-supabase-entegrasyon | SQL Server → Supabase stok senkronizasyonu kurulum rehberi
+
+- `stok/n8n-supabase-sql-kurulum.md` oluşturuldu
+- Kapsam: Credential kurulumu, UNIQUE constraint, field mapping, Upsert yapılandırması, hazır workflow JSON
+- Alan eşleştirme: `sth_stok_kod` → `barcode`, `sth_miktar` → `stock`
+- **GÜNCELLENDİ**: Mimari değişti — overwrite değil RPC delta fonksiyonu, upsert değil HTTP Request
+
+---
+
+## [2026-05-18] mimari-karar | Supabase Source of Truth + handle_invoice_stock RPC
+
+- Mikro'nun canlı stok tutmadığı tespit edildi → Supabase tek gerçek kaynak
+- `handle_invoice_stock(p_barcode, p_miktar, p_type)` RPC fonksiyonu yazıldı
+- n8n: Schedule (2h) → SQL (son 2h, evrak_tip 1/6) → HTTP Request RPC
+- Kritik formül: `sth_evrak_tip == 1 ? 1 : 0` (Satış=düş, Alış=ekle)
+- Ev ortamında Docker DNS sorunu — ofiste aktive edilecek
