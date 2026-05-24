@@ -1137,10 +1137,12 @@ async function handleInvoiceUpload(e, mode) {
     for (const file of files) {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      console.log('[PDF] Sayfa sayısı:', pdf.numPages);
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
+        console.log('[PDF] Sayfa', i, '- item sayısı:', content.items.length, content.items.length > 0 ? '| İlk item:' + JSON.stringify(content.items[0]) : '(BOŞ)');
         let prevY = null, line = '';
         const lines = [];
         for (const item of content.items) {
