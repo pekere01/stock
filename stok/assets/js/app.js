@@ -1163,7 +1163,8 @@ async function handleInvoiceUpload(e, mode) {
     const { updated, notFound } = await applyInvoiceStock(items, mode);
     const verb     = mode === 'in' ? 'stoka eklendi' : 'stoktan düşüldü';
     const fileInfo = files.length > 1 ? `${files.length} fatura işlendi · ` : '';
-    toast(`${fileInfo}${updated} kalem ${verb}${notFound > 0 ? ` · ${notFound} kod bulunamadı` : ''}`, updated > 0 ? 'success' : 'error');
+    const errInfo  = notFound > 0 ? ` · ${notFound} kalem RPC hatası` : '';
+    toast(`${fileInfo}${updated} kalem ${verb}${errInfo}`, updated > 0 ? 'success' : 'error');
     await loadData(currentPage);
     renderAll();
   } catch (err) {
@@ -1199,41 +1200,25 @@ function extractInvoiceItems(text) {
 
 async function applyInvoiceStock(items, mode) {
   let updated = 0, notFound = 0;
-  const isSale = mode === 'sale';
+  const isAlim = mode === 'in';
 
   for (const { barcode, qty } of items) {
-    const { data, error } = await sb
-      .from('products')
-      .select('id, name, stock, min_stock, sales7d')
-      .eq('barcode', barcode)
-      .single();
+    const { data, error } = await sb.rpc('handle_invoice_stock', {
+      p_barcode: barcode.trim(),
+      p_qty:     parseInt(qty),
+      p_type:    isAlim ? 0 : 1
+    });
 
-    if (error || !data) { notFound++; continue; }
-
-    const oldStock   = data.stock ?? 0;
-    const newStock   = isSale ? Math.max(0, oldStock - qty) : oldStock + qty;
-    const newSales7d = isSale ? (data.sales7d || 0) + qty : (data.sales7d || 0);
-    const newStatus  = calcStatus({ stock: newStock, minStock: data.min_stock ?? 0 });
-
-    const { error: upErr } = await sb.from('products').update({
-      stock:   newStock,
-      sales7d: newSales7d,
-      status:  newStatus
-    }).eq('id', data.id);
-
-    if (upErr) { notFound++; continue; }
-
-    const local = products.find(p => p.id === data.id);
-    if (local) { local.stock = newStock; local.sales7d = newSales7d; local.status = newStatus; }
+    if (error) { notFound++; continue; }
 
     logMovement({
-      productId:   data.id,
-      productName: data.name,
-      type:        isSale ? 'sale' : 'in',
+      productId:   data?.id   || null,
+      productName: data?.name || barcode,
+      type:        isAlim ? 'in' : 'sale',
       quantity:    qty,
-      oldStock,
-      newStock,
-      notes:       isSale ? 'E-Fatura ile otomatik stoktan düşüldü' : 'E-Fatura ile otomatik stok girişi'
+      oldStock:    data?.old_stock ?? null,
+      newStock:    data?.new_stock ?? null,
+      notes:       isAlim ? 'E-Fatura ile otomatik stok girişi' : 'E-Fatura ile otomatik stoktan düşüldü'
     });
     updated++;
   }
