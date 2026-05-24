@@ -1136,6 +1136,7 @@ async function handleInvoiceUpload(e, mode) {
     const aggregateMap = new Map();
     for (const file of files) {
       const arrayBuffer = await file.arrayBuffer();
+      const rawBuffer = arrayBuffer.slice(0); // pdf.js worker'a transfer sonrası için kopya
       const pdf = await pdfjsLib.getDocument({
         data: arrayBuffer,
         cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/cmaps/',
@@ -1185,7 +1186,7 @@ async function handleInvoiceUpload(e, mode) {
 
       // Strateji 3: Ham PDF stream decompression (Form XObject içindeki text)
       console.log('[PDF] Ham stream analizi başlıyor...');
-      for (const { barcode, qty } of await extractFromRawPdfStreams(arrayBuffer)) {
+      for (const { barcode, qty } of await extractFromRawPdfStreams(rawBuffer)) {
         aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
       }
     }
