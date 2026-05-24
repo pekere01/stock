@@ -1,0 +1,30 @@
+## === GitHub'da SADECE çalışan kod kalır ===
+## index.html + assets/ + supabase/ → GitHub'da
+## Geri her şey → sadece lokalde
+
+# Supabase geçici dosyalar
+supabase/.temp/
+
+# Obsidian notları ve belgeleme (lokalde kalır)
+*.md
+*.canvas
+*.base
+
+# Claude Code ve geliştirme araçları
+.claude/
+.claudeignore
+graphify-out/
+assets/js/graphify-out/
+supabase/functions/**/graphify-out/
+
+# IDE
+.vscode/
+
+# Sıkıştırılmış arşivler
+*.rar
+*.zip
+
+# Windows
+nul
+Thumbs.db
+Desktop.ini
