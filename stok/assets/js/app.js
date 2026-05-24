@@ -1130,13 +1130,17 @@ async function handleInvoiceUpload(e, mode) {
   if (labelEl) labelEl.style.pointerEvents = 'none';
 
   try {
-    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    const pdfjsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
     const aggregateMap = new Map();
     for (const file of files) {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({
+        data: arrayBuffer,
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/cmaps/',
+        cMapPacked: true,
+      }).promise;
       console.log('[PDF] Sayfa sayısı:', pdf.numPages);
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
