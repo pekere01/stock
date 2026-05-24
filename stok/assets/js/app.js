@@ -1180,6 +1180,10 @@ function extractInvoiceItems(text) {
   const lines = text.split('\n');
   const itemMap = new Map();
 
+  console.log('[Invoice] Toplam satır:', lines.length);
+  const sevenDigit = lines.filter(l => /\b\d{7}\b/.test(l));
+  console.log('[Invoice] 7 haneli kod içeren satırlar:', sevenDigit);
+
   for (let i = 0; i < lines.length; i++) {
     const codeMatch = lines[i].match(/\b(\d{7})\b/);
     if (!codeMatch) continue;
@@ -1187,14 +1191,16 @@ function extractInvoiceItems(text) {
 
     // Aynı satırda ya da sonraki 2 satırda miktar + Adet ara
     const searchText = lines.slice(i, i + 3).join(' ');
+    console.log('[Invoice] Kod bulundu:', barcode, '→ arama metni:', searchText);
     const qtyMatch = searchText.match(/\b(\d{1,4})\s+(?:[Aa][Dd][Ee][Tt]|[Mm][Ii][Kk][Tt][Aa][Rr])\b/);
-    if (!qtyMatch) continue;
+    if (!qtyMatch) { console.log('[Invoice] Miktar bulunamadı bu kod için'); continue; }
 
     const qty = parseInt(qtyMatch[1], 10);
     if (qty <= 0 || qty > 9999) continue;
     itemMap.set(barcode, (itemMap.get(barcode) || 0) + qty);
   }
 
+  console.log('[Invoice] Sonuç:', [...itemMap.entries()]);
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
 }
 
