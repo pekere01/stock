@@ -1143,19 +1143,17 @@ async function handleInvoiceUpload(e, mode) {
         cMapPacked: true,
       }).promise;
 
-      // Strateji 1: text layer
+      // Strateji 1a: getTextContent (standart PDF'ler)
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent({ includeMarkedContent: true });
-        let prevY = null, line = '';
-        const lines = [];
+        let prevY = null, line = '', lines = [];
         for (const item of content.items) {
           if (!item.str) continue;
           const y = Math.round(item.transform[5]);
           if (prevY !== null && prevY !== y) { if (line.trim()) lines.push(line.trim()); line = ''; }
-          line += item.str;
-          prevY = y;
+          line += item.str; prevY = y;
         }
         if (line.trim()) lines.push(line.trim());
         fullText += lines.join('\n') + '\n';
@@ -1163,6 +1161,34 @@ async function handleInvoiceUpload(e, mode) {
 
       if (fullText.trim()) {
         for (const { barcode, qty } of extractInvoiceItems(fullText)) {
+          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+        }
+        continue;
+      }
+
+      // Strateji 1b: getOperatorList — Form XObject içindeki text dahil
+      let opText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const opList = await page.getOperatorList();
+        const parts = [];
+        for (let j = 0; j < opList.fnArray.length; j++) {
+          if (opList.fnArray[j] === pdfjsLib.OPS.showText) {
+            const glyphs = opList.argsArray[j][0];
+            let part = '';
+            for (const g of glyphs) {
+              if (g && typeof g === 'object' && g.unicode) part += g.unicode;
+              else if (typeof g === 'number' && g < -200) part += ' ';
+            }
+            if (part.trim()) parts.push(part.trim());
+          }
+        }
+        console.log('[OPS] Sayfa', i, '- text parçaları:', parts.length, parts.slice(0, 10));
+        opText += parts.join(' ') + '\n';
+      }
+
+      if (opText.trim()) {
+        for (const { barcode, qty } of extractInvoiceItems(opText)) {
           aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
         }
         continue;
