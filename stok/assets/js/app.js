@@ -1141,15 +1141,16 @@ async function handleInvoiceUpload(e, mode) {
         cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/cmaps/',
         cMapPacked: true,
       }).promise;
-      console.log('[PDF] Sayfa sayısı:', pdf.numPages);
+
+      // Strateji 1: text layer
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        console.log('[PDF] Sayfa', i, '- item sayısı:', content.items.length, content.items.length > 0 ? '| İlk item:' + JSON.stringify(content.items[0]) : '(BOŞ)');
+        const content = await page.getTextContent({ includeMarkedContent: true });
         let prevY = null, line = '';
         const lines = [];
         for (const item of content.items) {
+          if (!item.str) continue;
           const y = Math.round(item.transform[5]);
           if (prevY !== null && prevY !== y) { if (line.trim()) lines.push(line.trim()); line = ''; }
           line += item.str;
@@ -1158,8 +1159,25 @@ async function handleInvoiceUpload(e, mode) {
         if (line.trim()) lines.push(line.trim());
         fullText += lines.join('\n') + '\n';
       }
-      for (const { barcode, qty } of extractInvoiceItems(fullText)) {
-        aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+
+      if (fullText.trim()) {
+        for (const { barcode, qty } of extractInvoiceItems(fullText)) {
+          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+        }
+        continue;
+      }
+
+      // Strateji 2: Gömülü UBL XML attachment (Türk e-fatura standardı)
+      console.log('[PDF] Text boş, XML attachment deneniyor...');
+      const attachments = await pdf.getAttachments();
+      if (attachments) {
+        for (const att of Object.values(attachments)) {
+          const xmlText = new TextDecoder('utf-8').decode(att.content);
+          console.log('[PDF] Attachment bulundu, ilk 200 karakter:', xmlText.slice(0, 200));
+          for (const { barcode, qty } of extractInvoiceItemsFromXml(xmlText)) {
+            aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+          }
+        }
       }
     }
 
@@ -1185,28 +1203,38 @@ async function handleInvoiceUpload(e, mode) {
 function extractInvoiceItems(text) {
   const lines = text.split('\n');
   const itemMap = new Map();
-
-  console.log('[Invoice] Toplam satır:', lines.length);
-  const sevenDigit = lines.filter(l => /\b\d{7}\b/.test(l));
-  console.log('[Invoice] 7 haneli kod içeren satırlar:', sevenDigit);
-
   for (let i = 0; i < lines.length; i++) {
     const codeMatch = lines[i].match(/\b(\d{7})\b/);
     if (!codeMatch) continue;
     const barcode = codeMatch[1];
-
-    // Aynı satırda ya da sonraki 2 satırda miktar + Adet ara
     const searchText = lines.slice(i, i + 3).join(' ');
-    console.log('[Invoice] Kod bulundu:', barcode, '→ arama metni:', searchText);
     const qtyMatch = searchText.match(/\b(\d{1,4})\s+(?:[Aa][Dd][Ee][Tt]|[Mm][Ii][Kk][Tt][Aa][Rr])\b/);
-    if (!qtyMatch) { console.log('[Invoice] Miktar bulunamadı bu kod için'); continue; }
-
+    if (!qtyMatch) continue;
     const qty = parseInt(qtyMatch[1], 10);
     if (qty <= 0 || qty > 9999) continue;
     itemMap.set(barcode, (itemMap.get(barcode) || 0) + qty);
   }
+  return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
+}
 
-  console.log('[Invoice] Sonuç:', [...itemMap.entries()]);
+function extractInvoiceItemsFromXml(xmlText) {
+  const itemMap = new Map();
+  // UBL TR 1.2 - her InvoiceLine bloğunu ayrıştır
+  const lineBlocks = xmlText.match(/<cac:InvoiceLine[\s\S]*?<\/cac:InvoiceLine>/g) || [];
+  console.log('[XML] InvoiceLine sayısı:', lineBlocks.length);
+  for (const block of lineBlocks) {
+    // Ürün kodu: SellersItemIdentification > ID (7 haneli)
+    const idMatch = block.match(/<cac:SellersItemIdentification>[\s\S]*?<cbc:ID>(\d{7})<\/cbc:ID>/);
+    if (!idMatch) continue;
+    const barcode = idMatch[1];
+    // Miktar: InvoicedQuantity
+    const qtyMatch = block.match(/<cbc:InvoicedQuantity[^>]*>([\d.,]+)<\/cbc:InvoicedQuantity>/);
+    if (!qtyMatch) continue;
+    const qty = Math.round(parseFloat(qtyMatch[1].replace(',', '.')));
+    if (qty <= 0 || qty > 99999) continue;
+    itemMap.set(barcode, (itemMap.get(barcode) || 0) + qty);
+  }
+  console.log('[XML] Bulunan kalemler:', [...itemMap.entries()]);
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
 }
 
