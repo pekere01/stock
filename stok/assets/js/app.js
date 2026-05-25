@@ -1257,15 +1257,21 @@ function extractInvoiceItems(text) {
   const lines = text.split('\n');
   const itemMap = new Map();
   for (let i = 0; i < lines.length; i++) {
+    let identifier = null;
     const codeMatch = lines[i].match(/\b(\d{7})\b/);
-    if (!codeMatch) continue;
-    const barcode = codeMatch[1];
+    if (codeMatch) {
+      identifier = codeMatch[1];
+    } else {
+      const nameMatch = lines[i].match(/\b([A-Z0-9]{2,}(?:[- ][A-Z0-9]+)+)\b/);
+      if (nameMatch) identifier = nameMatch[1].trim();
+    }
+    if (!identifier) continue;
     const searchText = lines.slice(i, i + 3).join(' ');
     const qtyMatch = searchText.match(/\b(\d{1,4})(?:[.,]\d+)?\s*(?:[Aa][Dd][Ee]?[Tt]?\.?|[Mm][Ii][Kk][Tt][Aa][Rr]?\.?|C62|NIU)\b/i);
     if (!qtyMatch) continue;
     const qty = parseInt(qtyMatch[1], 10);
     if (qty <= 0 || qty > 9999) continue;
-    itemMap.set(barcode, (itemMap.get(barcode) || 0) + qty);
+    itemMap.set(identifier, (itemMap.get(identifier) || 0) + qty);
   }
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
 }
@@ -1276,16 +1282,15 @@ function extractInvoiceItemsFromXml(xmlText) {
   const lineBlocks = xmlText.match(/<cac:InvoiceLine[\s\S]*?<\/cac:InvoiceLine>/g) || [];
   console.log('[XML] InvoiceLine sayısı:', lineBlocks.length);
   for (const block of lineBlocks) {
-    // Ürün kodu: SellersItemIdentification > ID (7 haneli)
-    const idMatch = block.match(/\b(\d{7})\b/);
-    if (!idMatch) continue;
-    const barcode = idMatch[1];
-    // Miktar: InvoicedQuantity
+    const nameMatch = block.match(/<cbc:Name>([^<]+)<\/cbc:Name>/);
+    const idMatch = block.match(/<cac:SellersItemIdentification>[\s\S]*?<cbc:ID>(\d{7})<\/cbc:ID>/);
+    let identifier = (idMatch && idMatch[1]) ? idMatch[1] : (nameMatch ? nameMatch[1].trim() : null);
+    if (!identifier) continue;
     const qtyMatch = block.match(/<cbc:InvoicedQuantity[^>]*>([\d.,]+)<\/cbc:InvoicedQuantity>/);
     if (!qtyMatch) continue;
     const qty = Math.round(parseFloat(qtyMatch[1].replace(',', '.')));
     if (qty <= 0 || qty > 99999) continue;
-    itemMap.set(barcode, (itemMap.get(barcode) || 0) + qty);
+    itemMap.set(identifier, (itemMap.get(identifier) || 0) + qty);
   }
   console.log('[XML] Bulunan kalemler:', [...itemMap.entries()]);
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
