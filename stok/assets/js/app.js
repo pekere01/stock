@@ -1261,7 +1261,7 @@ function extractInvoiceItems(text) {
     if (!codeMatch) continue;
     const barcode = codeMatch[1];
     const searchText = lines.slice(i, i + 3).join(' ');
-    const qtyMatch = searchText.match(/\b(\d{1,4})\s+(?:[Aa][Dd][Ee][Tt]|[Mm][Ii][Kk][Tt][Aa][Rr])\b/);
+    const qtyMatch = searchText.match(/\b(\d{1,4})(?:[.,]\d+)?\s*(?:[Aa][Dd][Ee]?[Tt]?\.?|[Mm][Ii][Kk][Tt][Aa][Rr]?\.?|C62|NIU)\b/i);
     if (!qtyMatch) continue;
     const qty = parseInt(qtyMatch[1], 10);
     if (qty <= 0 || qty > 9999) continue;
@@ -1277,7 +1277,7 @@ function extractInvoiceItemsFromXml(xmlText) {
   console.log('[XML] InvoiceLine sayısı:', lineBlocks.length);
   for (const block of lineBlocks) {
     // Ürün kodu: SellersItemIdentification > ID (7 haneli)
-    const idMatch = block.match(/<cac:SellersItemIdentification>[\s\S]*?<cbc:ID>(\d{7})<\/cbc:ID>/);
+    const idMatch = block.match(/\b(\d{7})\b/);
     if (!idMatch) continue;
     const barcode = idMatch[1];
     // Miktar: InvoicedQuantity
