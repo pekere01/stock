@@ -117,7 +117,7 @@ export async function loadData(page = 0, recount = true) {
     const hasTextSearch = !!safe;
     const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter);
     let q = sb.from('products')
-      .select('*', (recount && hasTextSearch) ? { count: 'exact' } : { count: 'none' })
+      .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' })
       .order('created_at', { ascending: false });
     if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
@@ -134,7 +134,7 @@ export async function loadData(page = 0, recount = true) {
     if (prodsRes.error) throw prodsRes.error;
     categories = (catsRes.data || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
     products   = (prodsRes.data || []).map(dbToProduct);
-    if (recount && hasTextSearch) totalCount = prodsRes.count ?? totalCount;
+    if (recount && hasFilter) totalCount = prodsRes.count ?? totalCount;
     if (!rpcRes.error && rpcRes.data) {
       dashboardSummary = rpcRes.data;
       if (!hasFilter) totalCount = rpcRes.data.total_products ?? totalCount;
