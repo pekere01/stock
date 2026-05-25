@@ -1376,8 +1376,10 @@ async function extractFromRawPdfStreams(arrayBuffer) {
 }
 
 async function extractFromOCR(pdf) {
-  const { createWorker } = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js');
-  const worker = await createWorker('eng', 1, {
+  const TesseractModule = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js');
+  const createWorker = TesseractModule.createWorker ?? TesseractModule.default?.createWorker;
+  if (typeof createWorker !== 'function') throw new Error('Tesseract createWorker yüklenemedi');
+  const worker = await createWorker('tur+eng', 1, {
     langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
   });
   let ocrText = '';
