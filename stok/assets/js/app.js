@@ -1257,6 +1257,8 @@ function extractInvoiceItems(text) {
   const lines = text.split('\n');
   const itemMap = new Map();
   for (let i = 0; i < lines.length; i++) {
+    // Açıklama sütununu yoksay: "P 148581" gibi genel proje/referans kodları
+    if (/^\s*P[\s-]\d{4,8}\s*$/.test(lines[i])) continue;
     let identifier = null;
     const codeMatch = lines[i].match(/\b(\d{7})\b/);
     if (codeMatch) {
