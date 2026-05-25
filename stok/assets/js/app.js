@@ -75,7 +75,7 @@ function dbToProduct(row) {
     id:           row.id,
     name:         row.name,
     barcode:      row.barcode || '',
-    category:     row.category,
+    category:     row.category || 'Genel',
     cost:         parseFloat(row.cost_price)  || 0,
     price:        parseFloat(row.sale_price)  || 0,
     stock:        row.stock        || 0,
@@ -118,10 +118,10 @@ export async function loadData(page = 0, recount = true) {
     const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter);
     let q = sb.from('products')
       .select('*', (recount && hasTextSearch) ? { count: 'exact' } : { count: 'none' })
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
     if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
-    if (pageStatusFilter === 'active') q = q.or('status.in.(active,low_stock),status.is.null');
+    if (pageStatusFilter === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
     else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
     q = q.range(from, to);
 
