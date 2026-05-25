@@ -1171,9 +1171,12 @@ async function handleInvoiceUpload(e, mode) {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const opList = await page.getOperatorList();
+        console.log('[OPS] fnArray uzunluğu:', opList.fnArray.length, '| OPS.showText:', pdfjsLib?.OPS?.showText, '| İlk 10 op:', opList.fnArray.slice(0, 10));
+        const SHOW_TEXT = pdfjsLib?.OPS?.showText ?? 39;
+        const SHOW_SPACED = pdfjsLib?.OPS?.showSpacedText ?? 40;
         const parts = [];
         for (let j = 0; j < opList.fnArray.length; j++) {
-          if (opList.fnArray[j] === pdfjsLib.OPS.showText) {
+          if (opList.fnArray[j] === SHOW_TEXT || opList.fnArray[j] === SHOW_SPACED) {
             const glyphs = opList.argsArray[j][0];
             let part = '';
             for (const g of glyphs) {
@@ -1210,10 +1213,24 @@ async function handleInvoiceUpload(e, mode) {
       }
       if (xmlFound) continue;
 
-      // Strateji 3: Ham PDF stream decompression (Form XObject içindeki text)
-      console.log('[PDF] Ham stream analizi başlıyor...');
-      for (const { barcode, qty } of await extractFromRawPdfStreams(rawBuffer)) {
+      // Strateji 3: Ham PDF stream decompression (literal + hex string + sıkıştırılmamış)
+      const rawItems = await extractFromRawPdfStreams(rawBuffer);
+      for (const { barcode, qty } of rawItems) {
         aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+      }
+      if (rawItems.length > 0) continue;
+
+      // Strateji 4: Canvas render + Tesseract.js OCR (son çare)
+      console.log('[OCR] Tüm stratejiler başarısız — OCR deneniyor...');
+      if (textEl) textEl.textContent = `⏳ OCR analizi…`;
+      try {
+        const ocrItems = await extractFromOCR(pdf);
+        for (const { barcode, qty } of ocrItems) {
+          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+        }
+        console.log('[OCR] Bulunan kalem sayısı:', ocrItems.length);
+      } catch (ocrErr) {
+        console.warn('[OCR] Başarısız:', ocrErr.message);
       }
     }
 
@@ -1278,14 +1295,38 @@ async function extractFromRawPdfStreams(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
   const allStrings = [];
 
-  // latin1 ile 1:1 byte→char dönüşümü (konum bozulmaz)
   let raw = '';
   const CHUNK = 8192;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     raw += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
   }
 
-  // Her stream...endstream bloğunu bul ve decompress et
+  function parseTextFromBlock(content) {
+    const texts = [];
+    const blocks = content.match(/BT[\s\S]*?ET/g) || [content];
+    for (const block of blocks) {
+      let m;
+      // Literal strings: (metin)
+      const litRe = /\(([^)]{0,500})\)/g;
+      while ((m = litRe.exec(block)) !== null) {
+        const s = m[1].trim();
+        if (s) texts.push(s);
+      }
+      // Hex strings: <4E6F...> — Türk e-fatura PDF'lerinde yaygın
+      const hexRe = /<([0-9A-Fa-f]{2,})>/g;
+      while ((m = hexRe.exec(block)) !== null) {
+        const hex = m[1].length % 2 ? m[1] + '0' : m[1];
+        let s = '';
+        for (let h = 0; h < hex.length; h += 2) {
+          const c = parseInt(hex.substr(h, 2), 16);
+          if (c >= 32 && c < 127) s += String.fromCharCode(c);
+        }
+        if (s.trim()) texts.push(s.trim());
+      }
+    }
+    return texts;
+  }
+
   let pos = 0;
   while (pos < raw.length) {
     const si = raw.indexOf('stream', pos);
@@ -1297,6 +1338,8 @@ async function extractFromRawPdfStreams(arrayBuffer) {
     if (ei === -1) break;
 
     const streamBytes = bytes.slice(cs, ei);
+    let decompressed = false;
+
     for (const fmt of ['deflate', 'deflate-raw']) {
       try {
         const ds = new DecompressionStream(fmt);
@@ -1309,26 +1352,48 @@ async function extractFromRawPdfStreams(arrayBuffer) {
         const merged = new Uint8Array(total);
         let off = 0; for (const c of chunks) { merged.set(c, off); off += c.length; }
         const decoded = new TextDecoder('latin1').decode(merged);
-        // Sadece printable ASCII ağırlıklı içeriği al (binary değil)
-        const printable = (decoded.match(/[\x20-\x7E]/g) || []).length / decoded.length;
-        if (printable > 0.5) {
-          // PDF string literal'larını çıkar: (metin)
-          const strRe = /\(([^)\\]{1,200})\)/g;
-          let m;
-          while ((m = strRe.exec(decoded)) !== null) {
-            const s = m[1].trim();
-            if (s) allStrings.push(s);
-          }
-        }
+        allStrings.push(...parseTextFromBlock(decoded));
+        decompressed = true;
         break;
       } catch (_) {}
     }
+
+    // Sıkıştırılmamış stream — BT/Tj operatörü varsa doğrudan tara
+    if (!decompressed) {
+      try {
+        const rawContent = new TextDecoder('latin1').decode(streamBytes);
+        if (rawContent.includes('BT') || rawContent.includes(' Tj') || rawContent.includes(' TJ')) {
+          allStrings.push(...parseTextFromBlock(rawContent));
+        }
+      } catch (_) {}
+    }
+
     pos = ei + 9;
   }
 
-  console.log('[RAW] Çıkarılan string sayısı:', allStrings.length, '| Örnek:', allStrings.slice(0, 10));
-  // Stringleri sırayla birleştirip extractInvoiceItems ile işle
-  return extractInvoiceItems(allStrings.join(' '));
+  console.log('[RAW] Çıkarılan string sayısı:', allStrings.length, '| Örnek:', allStrings.slice(0, 15));
+  return extractInvoiceItems(allStrings.join('\n'));
+}
+
+async function extractFromOCR(pdf) {
+  const { createWorker } = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js');
+  const worker = await createWorker('eng', 1, {
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
+  });
+  let ocrText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2.5 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    const { data: { text } } = await worker.recognize(canvas);
+    ocrText += text + '\n';
+    console.log('[OCR] Sayfa', i, ':', text.substring(0, 300));
+  }
+  await worker.terminate();
+  return extractInvoiceItems(ocrText);
 }
 
 async function applyInvoiceStock(items, mode) {
