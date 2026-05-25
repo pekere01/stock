@@ -121,7 +121,7 @@ export async function loadData(page = 0, recount = true) {
       .order('created_at', { ascending: true });
     if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
-    if (pageStatusFilter === 'active') q = q.in('status', ['active', 'low_stock']);
+    if (pageStatusFilter === 'active') q = q.or('status.in.(active,low_stock),status.is.null');
     else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
     q = q.range(from, to);
 
