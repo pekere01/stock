@@ -1416,6 +1416,8 @@ async function applyInvoiceStock(items, mode) {
 
     if (error) { notFound++; continue; }
 
+    console.log('[RPC DEBUG] Dönen Veri:', data);
+
     logMovement({
       productId:   data?.id   || null,
       productName: data?.name || barcode,
