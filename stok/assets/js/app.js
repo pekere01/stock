@@ -1135,6 +1135,40 @@ async function handleInvoiceUpload(e, mode) {
 
     const aggregateMap = new Map();
     for (const file of files) {
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      // XML dosyası: doğrudan parse et
+      if (ext === 'xml') {
+        const xmlText = await file.text();
+        const xmlItems = extractInvoiceItemsFromXml(xmlText);
+        for (const { barcode, qty } of xmlItems) {
+          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+        }
+        if (xmlItems.length === 0) console.warn('[XML] InvoiceLine bulunamadı:', file.name);
+        continue;
+      }
+
+      // ZIP dosyası: içindeki XML'i bul
+      if (ext === 'zip') {
+        try {
+          const { default: JSZip } = await import('https://esm.sh/jszip@3.10.1');
+          const zip = await JSZip.loadAsync(file);
+          for (const [entryName, entry] of Object.entries(zip.files)) {
+            if (!entryName.toLowerCase().endsWith('.xml')) continue;
+            const xmlText = await entry.async('text');
+            if (!xmlText.includes('InvoiceLine') && !xmlText.includes('InvoicedQuantity')) continue;
+            const xmlItems = extractInvoiceItemsFromXml(xmlText);
+            for (const { barcode, qty } of xmlItems) {
+              aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+            }
+            if (xmlItems.length > 0) break;
+          }
+        } catch (zipErr) {
+          console.warn('[ZIP] İşlenemedi:', zipErr.message);
+        }
+        continue;
+      }
+
       const arrayBuffer = await file.arrayBuffer();
       const rawBuffer = arrayBuffer.slice(0); // pdf.js worker'a transfer sonrası için kopya
       const pdf = await pdfjsLib.getDocument({
@@ -1225,7 +1259,11 @@ async function handleInvoiceUpload(e, mode) {
       }
 
       // Strateji 2b: getOperatorList — Form XObject içindeki text dahil
+      // Eğer 2a yeterli metin satırı döndürdüyse (15+) font-encoding sorunu var demektir;
+      // OPS aynı bozuk veriyi daha parçalı verir ve şirket adından hayalet ürün üretir.
+      const textLineCount = fullText.split('\n').filter(l => l.trim()).length;
       let opText = '';
+      if (textLineCount < 15) {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const opList = await page.getOperatorList();
@@ -1255,6 +1293,7 @@ async function handleInvoiceUpload(e, mode) {
         }
         if (opItems.length > 0) continue;
       }
+      } // end if (textLineCount < 15)
 
       // Strateji 3: Ham PDF stream decompression (literal + hex string + sıkıştırılmamış)
       const rawItems = await extractFromRawPdfStreams(rawBuffer);
