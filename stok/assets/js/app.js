@@ -1143,6 +1143,26 @@ async function handleInvoiceUpload(e, mode) {
         cMapPacked: true,
       }).promise;
 
+      // Strateji 0: Edge Function sunucu tarafı XML parse (en güvenilir)
+      try {
+        const pdfBytes = new Uint8Array(rawBuffer);
+        let b64 = '';
+        for (let bi = 0; bi < pdfBytes.length; bi++) b64 += String.fromCharCode(pdfBytes[bi]);
+        const { data: efData, error: efErr } = await sb.functions.invoke('parse-invoice-pdf', {
+          body: { pdf_base64: btoa(b64) }
+        });
+        if (!efErr && efData?.items?.length > 0) {
+          console.log('[EF] Edge Function başarılı, kalem sayısı:', efData.items.length);
+          for (const { barcode, qty } of efData.items) {
+            aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+          }
+          continue;
+        }
+        console.log('[EF] Edge Function sonuç:', efErr?.message || efData?.debug || 'boş');
+      } catch (efEx) {
+        console.warn('[EF] Edge Function çağrısı başarısız:', efEx.message);
+      }
+
       // Strateji 1a: Gömülü UBL XML attachment (pdfjs getAttachments)
       const attachments = await pdf.getAttachments();
       console.log('[XML] getAttachments:', attachments ? Object.keys(attachments) : 'null');
