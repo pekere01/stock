@@ -1143,7 +1143,28 @@ async function handleInvoiceUpload(e, mode) {
         cMapPacked: true,
       }).promise;
 
-      // Strateji 1a: getTextContent (standart PDF'ler)
+      // Strateji 1: Gömülü UBL XML attachment — Türk e-fatura için en güvenilir yol
+      const attachments = await pdf.getAttachments();
+      let xmlFound = false;
+      if (attachments) {
+        for (const att of Object.values(attachments)) {
+          try {
+            const xmlText = new TextDecoder('utf-8').decode(att.content);
+            if (xmlText.includes('InvoiceLine') || xmlText.includes('InvoicedQuantity')) {
+              const xmlItems = extractInvoiceItemsFromXml(xmlText);
+              if (xmlItems.length > 0) {
+                xmlFound = true;
+                for (const { barcode, qty } of xmlItems) {
+                  aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+      if (xmlFound) continue;
+
+      // Strateji 2a: getTextContent (standart PDF'ler — XML yoksa)
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
@@ -1168,7 +1189,7 @@ async function handleInvoiceUpload(e, mode) {
         if (textItems.length > 0) continue;
       }
 
-      // Strateji 1b: getOperatorList — Form XObject içindeki text dahil
+      // Strateji 2b: getOperatorList — Form XObject içindeki text dahil
       let opText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
@@ -1199,22 +1220,6 @@ async function handleInvoiceUpload(e, mode) {
         }
         if (opItems.length > 0) continue;
       }
-
-      // Strateji 2: Gömülü UBL XML attachment (Türk e-fatura standardı)
-      const attachments = await pdf.getAttachments();
-      let xmlFound = false;
-      if (attachments) {
-        for (const att of Object.values(attachments)) {
-          const xmlText = new TextDecoder('utf-8').decode(att.content);
-          if (xmlText.includes('InvoiceLine') || xmlText.includes('InvoicedQuantity')) {
-            xmlFound = true;
-            for (const { barcode, qty } of extractInvoiceItemsFromXml(xmlText)) {
-              aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-            }
-          }
-        }
-      }
-      if (xmlFound) continue;
 
       // Strateji 3: Ham PDF stream decompression (literal + hex string + sıkıştırılmamış)
       const rawItems = await extractFromRawPdfStreams(rawBuffer);
@@ -1288,13 +1293,13 @@ function extractInvoiceItemsFromXml(xmlText) {
   const lineBlocks = xmlText.match(/<cac:InvoiceLine[\s\S]*?<\/cac:InvoiceLine>/g) || [];
   console.log('[XML] InvoiceLine sayısı:', lineBlocks.length);
   for (const block of lineBlocks) {
-    // Sadece <cbc:Name> okunur — satıcı kodları ve yan etiketler yoksayılır
+    // Alış faturası: SellersItemIdentification'daki 7 haneli barkod (Kod sütunu) öncelikli
+    const idMatch = block.match(/<cac:SellersItemIdentification>[\s\S]*?<cbc:ID>(\d{7})<\/cbc:ID>/);
+    // Satış faturası: <cbc:Name> ile ürün adı (Mal Hizmet Adı sütunu)
     const nameMatch = block.match(/<cbc:Name>([^<]+)<\/cbc:Name>/);
-    if (!nameMatch) continue;
-    const identifier = nameMatch[1].trim();
+    const identifier = (idMatch && idMatch[1]) ? idMatch[1] : (nameMatch ? nameMatch[1].trim() : null);
     if (!identifier) continue;
 
-    // Sadece <cbc:InvoicedQuantity> okunur
     const qtyMatch = block.match(/<cbc:InvoicedQuantity[^>]*>([\d.,]+)<\/cbc:InvoicedQuantity>/);
     if (!qtyMatch) continue;
     const qty = Math.round(parseFloat(qtyMatch[1].replace(',', '.')));
