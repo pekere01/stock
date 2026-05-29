@@ -1160,10 +1160,12 @@ async function handleInvoiceUpload(e, mode) {
       }
 
       if (fullText.trim()) {
-        for (const { barcode, qty } of extractInvoiceItems(fullText)) {
+        console.log('[TEXT] fullText satırları:', fullText.split('\n').slice(0, 40));
+        const textItems = extractInvoiceItems(fullText);
+        for (const { barcode, qty } of textItems) {
           aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
         }
-        continue;
+        if (textItems.length > 0) continue;
       }
 
       // Strateji 1b: getOperatorList — Form XObject içindeki text dahil
@@ -1191,10 +1193,11 @@ async function handleInvoiceUpload(e, mode) {
       }
 
       if (opText.trim()) {
-        for (const { barcode, qty } of extractInvoiceItems(opText)) {
+        const opItems = extractInvoiceItems(opText);
+        for (const { barcode, qty } of opItems) {
           aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
         }
-        continue;
+        if (opItems.length > 0) continue;
       }
 
       // Strateji 2: Gömülü UBL XML attachment (Türk e-fatura standardı)
@@ -1256,36 +1259,26 @@ async function handleInvoiceUpload(e, mode) {
 function extractInvoiceItems(text) {
   const lines = text.split('\n');
   const itemMap = new Map();
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    // CSV satırı: tırnaklı alanları veya virgülle ayrılmış sütunları ayrıştır
-    let cols;
-    if (trimmed.includes('"')) {
-      const matches = trimmed.match(/"([^"]*)"/g);
-      cols = matches ? matches.map(s => s.replace(/"/g, '').trim()) : trimmed.split(',').map(s => s.trim());
+  for (let i = 0; i < lines.length; i++) {
+    // Açıklama sütununu inline temizle: "P 148581" satır içinde de bloke
+    const line = lines[i].replace(/\bP[\s-]\d{4,8}\b/gi, '').trim();
+    if (!line) continue;
+    let identifier = null;
+    const codeMatch = line.match(/\b(\d{7})\b/);
+    if (codeMatch) {
+      identifier = codeMatch[1];
     } else {
-      cols = trimmed.split(',').map(s => s.trim());
+      const nameMatch = line.match(/\b([A-Z0-9]{2,}(?:[- ][A-Z0-9]+)+)\b/);
+      if (nameMatch) identifier = nameMatch[1].trim();
     }
-
-    // En az 4 sütun zorunlu: [Sıra No, Mal Hizmet Adı, Açıklama, Miktar, ...]
-    if (cols.length < 4) continue;
-
-    // Sütun 1 → Mal Hizmet Adı (ürün adı/kodu)
-    const name = cols[1];
-    if (!name || /^\d+$/.test(name)) continue;
-
-    // Sütun 3 → Miktar — sadece sayısal kısım alınır, birim/fiyat bloke
-    const qtyMatch = cols[3].match(/(\d+)/);
+    if (!identifier) continue;
+    const searchText = lines.slice(i, i + 3).join(' ');
+    const qtyMatch = searchText.match(/\b(\d{1,4})(?:[.,]\d+)?\s*(?:[Aa][Dd][Ee]?[Tt]?\.?|[Mm][Ii][Kk][Tt][Aa][Rr]?\.?|C62|NIU)\b/i);
     if (!qtyMatch) continue;
     const qty = parseInt(qtyMatch[1], 10);
-    if (qty <= 0 || qty > 99999) continue;
-
-    itemMap.set(name, (itemMap.get(name) || 0) + qty);
+    if (qty <= 0 || qty > 9999) continue;
+    itemMap.set(identifier, (itemMap.get(identifier) || 0) + qty);
   }
-
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
 }
 
