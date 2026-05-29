@@ -1143,8 +1143,9 @@ async function handleInvoiceUpload(e, mode) {
         cMapPacked: true,
       }).promise;
 
-      // Strateji 1: Gömülü UBL XML attachment — Türk e-fatura için en güvenilir yol
+      // Strateji 1a: Gömülü UBL XML attachment (pdfjs getAttachments)
       const attachments = await pdf.getAttachments();
+      console.log('[XML] getAttachments:', attachments ? Object.keys(attachments) : 'null');
       let xmlFound = false;
       if (attachments) {
         for (const att of Object.values(attachments)) {
@@ -1163,6 +1164,20 @@ async function handleInvoiceUpload(e, mode) {
         }
       }
       if (xmlFound) continue;
+
+      // Strateji 1b: Ham stream XML taraması — getAttachments() bulamazsa deflate içinde ara
+      try {
+        const rawXmlText = await extractXmlFromRawStreams(rawBuffer);
+        if (rawXmlText) {
+          const xmlItems = extractInvoiceItemsFromXml(rawXmlText);
+          if (xmlItems.length > 0) {
+            for (const { barcode, qty } of xmlItems) {
+              aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+            }
+            continue;
+          }
+        }
+      } catch (_) {}
 
       // Strateji 2a: getTextContent (standart PDF'ler — XML yoksa)
       let fullText = '';
@@ -1273,7 +1288,8 @@ function extractInvoiceItems(text) {
     if (codeMatch) {
       identifier = codeMatch[1];
     } else {
-      const nameMatch = line.match(/\b([A-Z0-9]{2,}(?:[- ][A-Z0-9]+)+)\b/);
+      // Harf ile başlamalı — "97 EUR", "13 TL 7", "25 A" gibi fiyat pattern'larını bloke eder
+      const nameMatch = line.match(/\b([A-Z][A-Z0-9]{1,}(?:[- ][A-Z0-9]+)+)\b/);
       if (nameMatch) identifier = nameMatch[1].trim();
     }
     if (!identifier) continue;
@@ -1308,6 +1324,51 @@ function extractInvoiceItemsFromXml(xmlText) {
   }
   console.log('[XML] Bulunan kalemler:', [...itemMap.entries()]);
   return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
+}
+
+async function extractXmlFromRawStreams(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  let raw = '';
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    raw += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+  }
+  let pos = 0;
+  while (pos < raw.length) {
+    const si = raw.indexOf('stream', pos);
+    if (si === -1) break;
+    let cs = si + 6;
+    if (raw[cs] === '\r') cs++;
+    if (raw[cs] === '\n') cs++;
+    const ei = raw.indexOf('endstream', cs);
+    if (ei === -1) break;
+    const streamBytes = bytes.slice(cs, ei);
+    if (streamBytes.length > 500) {
+      for (const fmt of ['deflate', 'deflate-raw']) {
+        try {
+          const ds = new DecompressionStream(fmt);
+          const w = ds.writable.getWriter();
+          w.write(streamBytes); w.close();
+          const r = ds.readable.getReader();
+          const chunks = [];
+          while (true) { const { done, value } = await r.read(); if (done) break; chunks.push(value); }
+          const total = chunks.reduce((s, c) => s + c.length, 0);
+          const merged = new Uint8Array(total);
+          let off = 0; for (const c of chunks) { merged.set(c, off); off += c.length; }
+          let decoded;
+          try { decoded = new TextDecoder('utf-8', { fatal: true }).decode(merged); }
+          catch { decoded = new TextDecoder('latin1').decode(merged); }
+          if (decoded.includes('InvoiceLine') || decoded.includes('InvoicedQuantity')) {
+            console.log('[XML-RAW] UBL XML stream bulundu, uzunluk:', decoded.length);
+            return decoded;
+          }
+          break;
+        } catch (_) {}
+      }
+    }
+    pos = ei + 9;
+  }
+  return null;
 }
 
 async function extractFromRawPdfStreams(arrayBuffer) {
@@ -1428,7 +1489,7 @@ async function applyInvoiceStock(items, mode) {
       p_type:    isAlim ? 0 : 1
     });
 
-    if (error) { notFound++; continue; }
+    if (error || !data) { notFound++; continue; }
 
     console.log('[RPC DEBUG] Dönen Veri:', data);
 
