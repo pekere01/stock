@@ -3,13 +3,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
+const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") ?? "";
+const SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+const PROMPT = `Sen bir Türk e-fatura uzmanısın. Bu faturadaki tüm ürün kalemlerini ayıkla.
+SADECE aşağıdaki JSON array formatında yanıt ver — başka hiçbir metin, açıklama veya markdown ekleme:
+[{"barcode":"BARKOD","name":"ÜRÜN ADI","qty":ADET}]
+Kurallar:
+- barcode: ürün barkod kodu veya ürün kodu (varsa); yoksa boş string ""
+- name: faturadaki tam ürün/mal hizmet adı
+- qty: tam sayı miktar/adet değeri
+- Fiyat, KDV, iskonto, toplam satırlarını dahil etme
+- Yalnızca gerçek mal/hizmet kalemlerini listele`;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
+  if (!req.headers.get("Authorization")) {
     return new Response(JSON.stringify({ error: "Yetkisiz" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -17,140 +30,110 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { pdf_base64 } = await req.json();
+    const body = await req.json();
+    const { pdf_base64, invoice_type = "alis" } = body;
+
     if (!pdf_base64) {
-      return new Response(JSON.stringify({ error: "pdf_base64 alanı eksik" }), {
+      return new Response(JSON.stringify({ error: "pdf_base64 eksik" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // base64 → Uint8Array
-    const binaryStr = atob(pdf_base64);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-
-    const xmlText = await findXmlInPdf(bytes);
-    if (!xmlText) {
-      return new Response(JSON.stringify({ items: [], debug: "XML bulunamadı" }), {
+    if (!GEMINI_API_KEY) {
+      return new Response(JSON.stringify({ error: "GEMINI_API_KEY ayarlanmamış — supabase secrets set GEMINI_API_KEY=..." }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const items = extractItemsFromXml(xmlText);
-    return new Response(JSON.stringify({ items }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Gemini 1.5 Flash — PDF inline data olarak gönder
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: PROMPT },
+              { inline_data: { mime_type: "application/pdf", data: pdf_base64 } },
+            ],
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+          },
+        }),
+      }
+    );
+
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      throw new Error(`Gemini ${geminiRes.status}: ${errText.slice(0, 400)}`);
+    }
+
+    const geminiData = await geminiRes.json();
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+    // Markdown code block'u temizle, JSON'u parse et
+    const jsonStr = rawText
+      .replace(/```json\s*/gi, "")
+      .replace(/```\s*/g, "")
+      .trim();
+
+    let items: Array<{ barcode: string; name: string; qty: number }>;
+    try {
+      items = JSON.parse(jsonStr);
+      if (!Array.isArray(items)) throw new Error("Yanıt JSON array değil");
+    } catch {
+      throw new Error(`JSON parse hatası — Gemini yanıtı: ${rawText.slice(0, 300)}`);
+    }
+
+    if (items.length === 0) {
+      return new Response(JSON.stringify({ processed: 0, total: 0 }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const pType = invoice_type === "satis" ? 1 : 0;
+    let processed = 0;
+
+    // Her kalem için handle_invoice_stock RPC çağır (service role)
+    for (const item of items) {
+      const barcode = String(item.barcode ?? "").trim();
+      const name    = String(item.name    ?? "").trim();
+      const qty     = Math.max(1, Math.round(Number(item.qty) || 1));
+      if (!barcode && !name) continue;
+
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/handle_invoice_stock`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SERVICE_ROLE,
+          "Authorization": `Bearer ${SERVICE_ROLE}`,
+        },
+        body: JSON.stringify({
+          p_barcode: barcode || name,
+          p_name:    name || barcode,
+          p_qty:     qty,
+          p_type:    pType,
+        }),
+      });
+
+      if (rpcRes.ok) processed++;
+    }
+
+    return new Response(
+      JSON.stringify({ processed, total: items.length }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (err) {
+    console.error("[parse-invoice-pdf]", err);
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
-
-// ── XML arama: önce sıkıştırılmamış, sonra deflate stream ──────────────────
-
-async function findXmlInPdf(bytes: Uint8Array): Promise<string | null> {
-  const raw = new TextDecoder("latin1").decode(bytes);
-
-  // 1. Sıkıştırılmamış XML: <?xml veya <ubl:Invoice direkt binary içinde
-  const starts = ["<?xml", "<ubl:Invoice", "<ns2:Invoice", "<Invoice "];
-  for (const marker of starts) {
-    const idx = raw.indexOf(marker);
-    if (idx !== -1 && raw.includes("InvoiceLine", idx)) {
-      // XML bitiş etiketi bul
-      const endings = ["</ubl:Invoice>", "</ns2:Invoice>", "</Invoice>"];
-      for (const end of endings) {
-        const endIdx = raw.indexOf(end, idx);
-        if (endIdx !== -1) {
-          const candidate = raw.slice(idx, endIdx + end.length);
-          if (candidate.includes("InvoiceLine") || candidate.includes("InvoicedQuantity")) {
-            console.log("[EF-XML] Sıkıştırılmamış XML bulundu, uzunluk:", candidate.length);
-            return candidate;
-          }
-        }
-      }
-    }
-  }
-
-  // 2. Deflate sıkıştırılmış stream'lerde ara
-  let pos = 0;
-  while (pos < raw.length) {
-    const si = raw.indexOf("stream", pos);
-    if (si === -1) break;
-    let cs = si + 6;
-    if (raw[cs] === "\r") cs++;
-    if (raw[cs] === "\n") cs++;
-    const ei = raw.indexOf("endstream", cs);
-    if (ei === -1) break;
-
-    const streamBytes = bytes.slice(cs, ei);
-    if (streamBytes.length > 200) {
-      for (const fmt of ["deflate", "deflate-raw"] as const) {
-        try {
-          const ds = new DecompressionStream(fmt);
-          const writer = ds.writable.getWriter();
-          writer.write(streamBytes);
-          writer.close();
-          const reader = ds.readable.getReader();
-          const chunks: Uint8Array[] = [];
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-          }
-          const total = chunks.reduce((s, c) => s + c.length, 0);
-          const merged = new Uint8Array(total);
-          let off = 0;
-          for (const c of chunks) { merged.set(c, off); off += c.length; }
-
-          let decoded: string;
-          try { decoded = new TextDecoder("utf-8", { fatal: true }).decode(merged); }
-          catch { decoded = new TextDecoder("latin1").decode(merged); }
-
-          if (decoded.includes("InvoiceLine") || decoded.includes("InvoicedQuantity")) {
-            console.log("[EF-XML] Deflate stream'de XML bulundu, uzunluk:", decoded.length);
-            return decoded;
-          }
-          break;
-        } catch { /* sonraki format */ }
-      }
-    }
-    pos = ei + 9;
-  }
-
-  return null;
-}
-
-// ── UBL-TR 1.2 XML → ürün listesi ──────────────────────────────────────────
-
-function extractItemsFromXml(xmlText: string): Array<{ barcode: string; qty: number }> {
-  const itemMap = new Map<string, number>();
-  const lineBlocks = xmlText.match(/<cac:InvoiceLine[\s\S]*?<\/cac:InvoiceLine>/g) ?? [];
-  console.log("[EF-XML] InvoiceLine sayısı:", lineBlocks.length);
-
-  for (const block of lineBlocks) {
-    // Alış faturası: 7 haneli barkod (Kod sütunu)
-    const idMatch = block.match(
-      /<cac:SellersItemIdentification>[\s\S]*?<cbc:ID>(\d{7})<\/cbc:ID>/
-    );
-    // Satış faturası: ürün adı
-    const nameMatch = block.match(/<cbc:Name>([^<]+)<\/cbc:Name>/);
-    const identifier = idMatch?.[1] ?? nameMatch?.[1]?.trim() ?? null;
-    if (!identifier) continue;
-
-    const qtyMatch = block.match(
-      /<cbc:InvoicedQuantity[^>]*>([\d.,]+)<\/cbc:InvoicedQuantity>/
-    );
-    if (!qtyMatch) continue;
-    const qty = Math.round(parseFloat(qtyMatch[1].replace(",", ".")));
-    if (qty <= 0 || qty > 99999) continue;
-
-    itemMap.set(identifier, (itemMap.get(identifier) ?? 0) + qty);
-  }
-
-  console.log("[EF-XML] Bulunan kalemler:", [...itemMap.entries()]);
-  return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
-}

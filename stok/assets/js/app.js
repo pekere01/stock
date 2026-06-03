@@ -1120,450 +1120,125 @@ async function logMovement({ productId, productName, type, quantity = 0, oldStoc
 /* ===== E-FATURA PDF OKUMA ===== */
 async function handleInvoiceUpload(e, mode) {
   if (!canDo('make_sales')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
-  const files = Array.from(e.target.files).filter(f => f.type === 'application/pdf');
+  const files = Array.from(e.target.files);
   e.target.value = '';
-  if (!files.length) { toast('Lütfen en az bir PDF yükleyin', 'error'); return; }
+  if (!files.length) { toast('Lütfen bir dosya yükleyin', 'error'); return; }
 
-  const textEl  = document.getElementById(mode === 'in' ? 'invoice-in-text'   : 'invoice-sale-text');
-  const labelEl = document.getElementById(mode === 'in' ? 'invoice-in-label'  : 'invoice-sale-label');
-  if (textEl) textEl.textContent = `⏳ ${files.length} dosya okunuyor…`;
+  const textEl    = document.getElementById(mode === 'in' ? 'invoice-in-text'  : 'invoice-sale-text');
+  const labelEl   = document.getElementById(mode === 'in' ? 'invoice-in-label' : 'invoice-sale-label');
+  const invoiceType = mode === 'in' ? 'alis' : 'satis';
+
+  if (textEl)  textEl.textContent = '⏳ Yapay zeka faturayı okuyor ve stokları güncelliyor...';
   if (labelEl) labelEl.style.pointerEvents = 'none';
 
-  try {
-    const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.mjs');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.mjs';
+  let totalProcessed = 0, totalErrors = 0;
 
-    const aggregateMap = new Map();
+  try {
     for (const file of files) {
       const ext = file.name.split('.').pop().toLowerCase();
-
-      // XML dosyası: doğrudan parse et
-      if (ext === 'xml') {
-        const xmlText = await file.text();
-        const xmlItems = extractInvoiceItemsFromXml(xmlText);
-        for (const { barcode, qty } of xmlItems) {
-          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+      try {
+        if (ext === 'xml') {
+          const xmlText = await file.text();
+          const items = extractInvoiceItemsFromXml(xmlText);
+          const { updated, notFound } = await applyInvoiceStock(items, mode);
+          totalProcessed += updated; totalErrors += notFound;
+          continue;
         }
-        if (xmlItems.length === 0) console.warn('[XML] InvoiceLine bulunamadı:', file.name);
-        continue;
-      }
-
-      // ZIP dosyası: içindeki XML'i bul
-      if (ext === 'zip') {
-        try {
+        if (ext === 'zip') {
           const { default: JSZip } = await import('https://esm.sh/jszip@3.10.1');
           const zip = await JSZip.loadAsync(file);
           for (const [entryName, entry] of Object.entries(zip.files)) {
             if (!entryName.toLowerCase().endsWith('.xml')) continue;
             const xmlText = await entry.async('text');
-            if (!xmlText.includes('InvoiceLine') && !xmlText.includes('InvoicedQuantity')) continue;
-            const xmlItems = extractInvoiceItemsFromXml(xmlText);
-            for (const { barcode, qty } of xmlItems) {
-              aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-            }
-            if (xmlItems.length > 0) break;
-          }
-        } catch (zipErr) {
-          console.warn('[ZIP] İşlenemedi:', zipErr.message);
-        }
-        continue;
-      }
-
-      const arrayBuffer = await file.arrayBuffer();
-      const rawBuffer = arrayBuffer.slice(0); // pdf.js worker'a transfer sonrası için kopya
-      const pdf = await pdfjsLib.getDocument({
-        data: arrayBuffer,
-        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/cmaps/',
-        cMapPacked: true,
-      }).promise;
-
-      // Strateji 0: Edge Function sunucu tarafı XML parse (en güvenilir)
-      try {
-        const pdfBytes = new Uint8Array(rawBuffer);
-        let b64 = '';
-        for (let bi = 0; bi < pdfBytes.length; bi++) b64 += String.fromCharCode(pdfBytes[bi]);
-        const { data: efData, error: efErr } = await sb.functions.invoke('parse-invoice-pdf', {
-          body: { pdf_base64: btoa(b64) }
-        });
-        if (!efErr && efData?.items?.length > 0) {
-          console.log('[EF] Edge Function başarılı, kalem sayısı:', efData.items.length);
-          for (const { barcode, qty } of efData.items) {
-            aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
+            if (!xmlText.includes('InvoiceLine')) continue;
+            const items = extractInvoiceItemsFromXml(xmlText);
+            const { updated, notFound } = await applyInvoiceStock(items, mode);
+            totalProcessed += updated; totalErrors += notFound;
+            break;
           }
           continue;
         }
-        console.log('[EF] Edge Function sonuç:', efErr?.message || efData?.debug || 'boş');
-      } catch (efEx) {
-        console.warn('[EF] Edge Function çağrısı başarısız:', efEx.message);
-      }
-
-      // Strateji 1a: Gömülü UBL XML attachment (pdfjs getAttachments)
-      const attachments = await pdf.getAttachments();
-      console.log('[XML] getAttachments:', attachments ? Object.keys(attachments) : 'null');
-      let xmlFound = false;
-      if (attachments) {
-        for (const att of Object.values(attachments)) {
-          try {
-            const xmlText = new TextDecoder('utf-8').decode(att.content);
-            if (xmlText.includes('InvoiceLine') || xmlText.includes('InvoicedQuantity')) {
-              const xmlItems = extractInvoiceItemsFromXml(xmlText);
-              if (xmlItems.length > 0) {
-                xmlFound = true;
-                for (const { barcode, qty } of xmlItems) {
-                  aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-                }
-              }
-            }
-          } catch (_) {}
-        }
-      }
-      if (xmlFound) continue;
-
-      // Strateji 1b: Ham stream XML taraması — getAttachments() bulamazsa deflate içinde ara
-      try {
-        const rawXmlText = await extractXmlFromRawStreams(rawBuffer);
-        if (rawXmlText) {
-          const xmlItems = extractInvoiceItemsFromXml(rawXmlText);
-          if (xmlItems.length > 0) {
-            for (const { barcode, qty } of xmlItems) {
-              aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-            }
-            continue;
-          }
-        }
-      } catch (_) {}
-
-      // Strateji 2a: getTextContent (standart PDF'ler — XML yoksa)
-      let fullText = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent({ includeMarkedContent: true });
-        let prevY = null, line = '', lines = [];
-        for (const item of content.items) {
-          if (!item.str) continue;
-          const y = Math.round(item.transform[5]);
-          if (prevY !== null && prevY !== y) { if (line.trim()) lines.push(line.trim()); line = ''; }
-          line += item.str; prevY = y;
-        }
-        if (line.trim()) lines.push(line.trim());
-        fullText += lines.join('\n') + '\n';
-      }
-
-      if (fullText.trim()) {
-        console.log('[TEXT] fullText satırları:', fullText.split('\n').slice(0, 40));
-        const textItems = extractInvoiceItems(fullText);
-        for (const { barcode, qty } of textItems) {
-          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-        }
-        if (textItems.length > 0) continue;
-      }
-
-      // Strateji 2b: getOperatorList — Form XObject içindeki text dahil
-      // Eğer 2a yeterli metin satırı döndürdüyse (15+) font-encoding sorunu var demektir;
-      // OPS aynı bozuk veriyi daha parçalı verir ve şirket adından hayalet ürün üretir.
-      const textLineCount = fullText.split('\n').filter(l => l.trim()).length;
-      let opText = '';
-      if (textLineCount < 15) {
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const opList = await page.getOperatorList();
-        console.log('[OPS] fnArray uzunluğu:', opList.fnArray.length, '| OPS.showText:', pdfjsLib?.OPS?.showText, '| İlk 10 op:', opList.fnArray.slice(0, 10));
-        const SHOW_TEXT = pdfjsLib?.OPS?.showText ?? 39;
-        const SHOW_SPACED = pdfjsLib?.OPS?.showSpacedText ?? 40;
-        const parts = [];
-        for (let j = 0; j < opList.fnArray.length; j++) {
-          if (opList.fnArray[j] === SHOW_TEXT || opList.fnArray[j] === SHOW_SPACED) {
-            const glyphs = opList.argsArray[j][0];
-            let part = '';
-            for (const g of glyphs) {
-              if (g && typeof g === 'object' && g.unicode) part += g.unicode;
-              else if (typeof g === 'number' && g < -200) part += ' ';
-            }
-            if (part.trim()) parts.push(part.trim());
-          }
-        }
-        console.log('[OPS] Sayfa', i, '- text parçaları:', parts.length, parts.slice(0, 10));
-        opText += parts.join(' ') + '\n';
-      }
-
-      if (opText.trim()) {
-        const opItems = extractInvoiceItems(opText);
-        for (const { barcode, qty } of opItems) {
-          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-        }
-        if (opItems.length > 0) continue;
-      }
-      } // end if (textLineCount < 15)
-
-      // Strateji 3: Ham PDF stream decompression (literal + hex string + sıkıştırılmamış)
-      const rawItems = await extractFromRawPdfStreams(rawBuffer);
-      for (const { barcode, qty } of rawItems) {
-        aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-      }
-      if (rawItems.length > 0) continue;
-
-      // Strateji 4: Canvas render + Tesseract.js OCR (son çare)
-      console.log('[OCR] Tüm stratejiler başarısız — OCR deneniyor...');
-      if (textEl) textEl.textContent = `⏳ OCR analizi…`;
-      try {
-        const ocrItems = await extractFromOCR(pdf);
-        for (const { barcode, qty } of ocrItems) {
-          aggregateMap.set(barcode, (aggregateMap.get(barcode) || 0) + qty);
-        }
-        console.log('[OCR] Bulunan kalem sayısı:', ocrItems.length);
-      } catch (ocrErr) {
-        console.warn('[OCR] Başarısız:', ocrErr.message);
+        // PDF → Gemini Edge Function
+        const base64 = await fileToBase64(file);
+        const { data: result, error: efErr } = await sb.functions.invoke('parse-invoice-pdf', {
+          body: { pdf_base64: base64, invoice_type: invoiceType },
+        });
+        if (efErr || result?.error) throw new Error(efErr?.message || result?.error);
+        totalProcessed += result.processed || 0;
+        totalErrors    += (result.total || 0) - (result.processed || 0);
+      } catch (fileErr) {
+        console.warn(`[INVOICE] ${file.name} işlenemedi:`, fileErr.message);
+        totalErrors++;
       }
     }
 
-    const items = Array.from(aggregateMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
-    if (!items.length) { toast('Faturalarda tanımlı ürün kodu bulunamadı', 'error'); return; }
-
-    const { updated, notFound } = await applyInvoiceStock(items, mode);
-    const verb     = mode === 'in' ? 'stoka eklendi' : 'stoktan düşüldü';
-    const fileInfo = files.length > 1 ? `${files.length} fatura işlendi · ` : '';
-    const errInfo  = notFound > 0 ? ` · ${notFound} kalem RPC hatası` : '';
-    toast(`${fileInfo}${updated} kalem ${verb}${errInfo}`, updated > 0 ? 'success' : 'error');
+    const verb    = mode === 'in' ? 'stoka eklendi' : 'stoktan düşüldü';
+    const errInfo = totalErrors > 0 ? ` · ${totalErrors} hata` : '';
+    toast(`${totalProcessed} kalem ${verb}${errInfo}`, totalProcessed > 0 ? 'success' : 'error');
     await loadData(currentPage);
     renderAll();
   } catch (err) {
-    console.error('Invoice parse error:', err);
-    toast('PDF okunamadı: ' + (err.message || err), 'error');
+    console.error('Invoice upload error:', err);
+    toast('Fatura işlenemedi: ' + (err.message || err), 'error');
   } finally {
-    if (textEl) textEl.textContent = mode === 'in' ? 'Alım Faturası' : 'Satış Faturası';
+    if (textEl)  textEl.textContent         = mode === 'in' ? 'Alım Faturası' : 'Satış Faturası';
     if (labelEl) labelEl.style.pointerEvents = '';
   }
 }
 
-function extractInvoiceItems(text) {
-  const lines = text.split('\n');
-  const itemMap = new Map();
-  for (let i = 0; i < lines.length; i++) {
-    // Açıklama sütununu inline temizle: "P 148581" satır içinde de bloke
-    const line = lines[i].replace(/\bP[\s-]\d{4,8}\b/gi, '').trim();
-    if (!line) continue;
-    let identifier = null;
-    const codeMatch = line.match(/\b(\d{7})\b/);
-    if (codeMatch) {
-      identifier = codeMatch[1];
-    } else {
-      // Harf ile başlamalı — "97 EUR", "13 TL 7", "25 A" gibi fiyat pattern'larını bloke eder
-      const nameMatch = line.match(/\b([A-Z][A-Z0-9]{1,}(?:[- ][A-Z0-9]+)+)\b/);
-      if (nameMatch) identifier = nameMatch[1].trim();
-    }
-    if (!identifier) continue;
-    const searchText = lines.slice(i, i + 3).join(' ');
-    const qtyMatch = searchText.match(/\b(\d{1,4})(?:[.,]\d+)?\s*(?:[Aa][Dd][Ee]?[Tt]?\.?|[Mm][Ii][Kk][Tt][Aa][Rr]?\.?|C62|NIU)\b/i);
-    if (!qtyMatch) continue;
-    const qty = parseInt(qtyMatch[1], 10);
-    if (qty <= 0 || qty > 9999) continue;
-    itemMap.set(identifier, (itemMap.get(identifier) || 0) + qty);
-  }
-  return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function extractInvoiceItemsFromXml(xmlText) {
-  const itemMap = new Map();
-  // UBL TR 1.2 - her InvoiceLine bloğunu ayrıştır
+  const items = [];
   const lineBlocks = xmlText.match(/<cac:InvoiceLine[\s\S]*?<\/cac:InvoiceLine>/g) || [];
-  console.log('[XML] InvoiceLine sayısı:', lineBlocks.length);
   for (const block of lineBlocks) {
-    // Alış faturası: SellersItemIdentification'daki 7 haneli barkod (Kod sütunu) öncelikli
-    const idMatch = block.match(/<cac:SellersItemIdentification>[\s\S]*?<cbc:ID>(\d{7})<\/cbc:ID>/);
-    // Satış faturası: <cbc:Name> ile ürün adı (Mal Hizmet Adı sütunu)
+    const idMatch   = block.match(/<cac:SellersItemIdentification>[\s\S]*?<cbc:ID>(\d{7})<\/cbc:ID>/);
     const nameMatch = block.match(/<cbc:Name>([^<]+)<\/cbc:Name>/);
-    const identifier = (idMatch && idMatch[1]) ? idMatch[1] : (nameMatch ? nameMatch[1].trim() : null);
-    if (!identifier) continue;
-
-    const qtyMatch = block.match(/<cbc:InvoicedQuantity[^>]*>([\d.,]+)<\/cbc:InvoicedQuantity>/);
+    const barcode   = idMatch?.[1] ?? '';
+    const name      = nameMatch?.[1]?.trim() ?? '';
+    if (!barcode && !name) continue;
+    const qtyMatch  = block.match(/<cbc:InvoicedQuantity[^>]*>([\d.,]+)<\/cbc:InvoicedQuantity>/);
     if (!qtyMatch) continue;
     const qty = Math.round(parseFloat(qtyMatch[1].replace(',', '.')));
     if (qty <= 0 || qty > 99999) continue;
-    itemMap.set(identifier, (itemMap.get(identifier) || 0) + qty);
+    const key      = barcode || name;
+    const existing = items.find(x => (x.barcode || x.name) === key);
+    if (existing) existing.qty += qty;
+    else items.push({ barcode, name, qty });
   }
-  console.log('[XML] Bulunan kalemler:', [...itemMap.entries()]);
-  return Array.from(itemMap.entries()).map(([barcode, qty]) => ({ barcode, qty }));
+  return items;
 }
 
-async function extractXmlFromRawStreams(arrayBuffer) {
-  const bytes = new Uint8Array(arrayBuffer);
-  let raw = '';
-  const CHUNK = 8192;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    raw += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
-  }
-  let pos = 0;
-  while (pos < raw.length) {
-    const si = raw.indexOf('stream', pos);
-    if (si === -1) break;
-    let cs = si + 6;
-    if (raw[cs] === '\r') cs++;
-    if (raw[cs] === '\n') cs++;
-    const ei = raw.indexOf('endstream', cs);
-    if (ei === -1) break;
-    const streamBytes = bytes.slice(cs, ei);
-    if (streamBytes.length > 500) {
-      for (const fmt of ['deflate', 'deflate-raw']) {
-        try {
-          const ds = new DecompressionStream(fmt);
-          const w = ds.writable.getWriter();
-          w.write(streamBytes); w.close();
-          const r = ds.readable.getReader();
-          const chunks = [];
-          while (true) { const { done, value } = await r.read(); if (done) break; chunks.push(value); }
-          const total = chunks.reduce((s, c) => s + c.length, 0);
-          const merged = new Uint8Array(total);
-          let off = 0; for (const c of chunks) { merged.set(c, off); off += c.length; }
-          let decoded;
-          try { decoded = new TextDecoder('utf-8', { fatal: true }).decode(merged); }
-          catch { decoded = new TextDecoder('latin1').decode(merged); }
-          if (decoded.includes('InvoiceLine') || decoded.includes('InvoicedQuantity')) {
-            console.log('[XML-RAW] UBL XML stream bulundu, uzunluk:', decoded.length);
-            return decoded;
-          }
-          break;
-        } catch (_) {}
-      }
-    }
-    pos = ei + 9;
-  }
-  return null;
-}
-
-async function extractFromRawPdfStreams(arrayBuffer) {
-  const bytes = new Uint8Array(arrayBuffer);
-  const allStrings = [];
-
-  let raw = '';
-  const CHUNK = 8192;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    raw += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
-  }
-
-  function parseTextFromBlock(content) {
-    const texts = [];
-    const blocks = content.match(/BT[\s\S]*?ET/g) || [content];
-    for (const block of blocks) {
-      let m;
-      // Literal strings: (metin)
-      const litRe = /\(([^)]{0,500})\)/g;
-      while ((m = litRe.exec(block)) !== null) {
-        const s = m[1].trim();
-        if (s) texts.push(s);
-      }
-      // Hex strings: <4E6F...> — Türk e-fatura PDF'lerinde yaygın
-      const hexRe = /<([0-9A-Fa-f]{2,})>/g;
-      while ((m = hexRe.exec(block)) !== null) {
-        const hex = m[1].length % 2 ? m[1] + '0' : m[1];
-        let s = '';
-        for (let h = 0; h < hex.length; h += 2) {
-          const c = parseInt(hex.substr(h, 2), 16);
-          if (c >= 32 && c < 127) s += String.fromCharCode(c);
-        }
-        if (s.trim()) texts.push(s.trim());
-      }
-    }
-    return texts;
-  }
-
-  let pos = 0;
-  while (pos < raw.length) {
-    const si = raw.indexOf('stream', pos);
-    if (si === -1) break;
-    let cs = si + 6;
-    if (raw[cs] === '\r') cs++;
-    if (raw[cs] === '\n') cs++;
-    const ei = raw.indexOf('endstream', cs);
-    if (ei === -1) break;
-
-    const streamBytes = bytes.slice(cs, ei);
-    let decompressed = false;
-
-    for (const fmt of ['deflate', 'deflate-raw']) {
-      try {
-        const ds = new DecompressionStream(fmt);
-        const w = ds.writable.getWriter();
-        w.write(streamBytes); w.close();
-        const r = ds.readable.getReader();
-        const chunks = [];
-        while (true) { const { done, value } = await r.read(); if (done) break; chunks.push(value); }
-        const total = chunks.reduce((s, c) => s + c.length, 0);
-        const merged = new Uint8Array(total);
-        let off = 0; for (const c of chunks) { merged.set(c, off); off += c.length; }
-        const decoded = new TextDecoder('latin1').decode(merged);
-        allStrings.push(...parseTextFromBlock(decoded));
-        decompressed = true;
-        break;
-      } catch (_) {}
-    }
-
-    // Sıkıştırılmamış stream — BT/Tj operatörü varsa doğrudan tara
-    if (!decompressed) {
-      try {
-        const rawContent = new TextDecoder('latin1').decode(streamBytes);
-        if (rawContent.includes('BT') || rawContent.includes(' Tj') || rawContent.includes(' TJ')) {
-          allStrings.push(...parseTextFromBlock(rawContent));
-        }
-      } catch (_) {}
-    }
-
-    pos = ei + 9;
-  }
-
-  console.log('[RAW] Çıkarılan string sayısı:', allStrings.length, '| Örnek:', allStrings.slice(0, 15));
-  return extractInvoiceItems(allStrings.join('\n'));
-}
-
-async function extractFromOCR(pdf) {
-  const TesseractModule = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js');
-  const createWorker = TesseractModule.createWorker ?? TesseractModule.default?.createWorker;
-  if (typeof createWorker !== 'function') throw new Error('Tesseract createWorker yüklenemedi');
-  const worker = await createWorker('tur+eng', 1, {
-    langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
-  });
-  let ocrText = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 2.5 });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-    const { data: { text } } = await worker.recognize(canvas);
-    ocrText += text + '\n';
-    console.log('[OCR] Sayfa', i, ':', text.substring(0, 300));
-  }
-  await worker.terminate();
-  return extractInvoiceItems(ocrText);
-}
 
 async function applyInvoiceStock(items, mode) {
   let updated = 0, notFound = 0;
   const isAlim = mode === 'in';
-
-  for (const { barcode, qty } of items) {
+  for (const { barcode = '', name = '', qty } of items) {
     const { data, error } = await sb.rpc('handle_invoice_stock', {
-      p_barcode: barcode.trim(),
+      p_barcode: (barcode || name || '').trim(),
+      p_name:    (name || barcode || '').trim(),
       p_qty:     parseInt(qty),
-      p_type:    isAlim ? 0 : 1
+      p_type:    isAlim ? 0 : 1,
     });
-
     if (error || !data) { notFound++; continue; }
-
-    console.log('[RPC DEBUG] Dönen Veri:', data);
-
     logMovement({
       productId:   data?.id   || null,
-      productName: data?.name || barcode,
+      productName: data?.name || name || barcode,
       type:        isAlim ? 'in' : 'sale',
       quantity:    qty,
       oldStock:    data?.old_stock ?? null,
       newStock:    data?.new_stock ?? null,
-      notes:       isAlim ? 'E-Fatura ile otomatik stok girişi' : 'E-Fatura ile otomatik stoktan düşüldü'
+      notes:       isAlim ? 'E-Fatura ile otomatik stok girişi' : 'E-Fatura ile otomatik stoktan düşüldü',
     });
     updated++;
   }
-
   return { updated, notFound };
 }
 
