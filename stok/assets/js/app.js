@@ -1180,7 +1180,7 @@ async function handleInvoiceUpload(e, mode) {
             quantity:    item.qty,
             oldStock:    item.old_stock,
             newStock:    item.new_stock,
-            notes:       mode === 'in' ? 'Gemini Faturası ile otomatik stok girişi' : 'Gemini Faturası ile otomatik stoktan düşüldü',
+            notes:       'Fatura girişi',
           });
         }
       } catch (fileErr) {
