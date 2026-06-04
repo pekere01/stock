@@ -13,7 +13,7 @@ SADECE aşağıdaki JSON array formatında yanıt ver — başka hiçbir metin, 
 
 Kurallar:
 - barcode: Faturadaki "Kod", "Ürün Kodu", "Stok Kodu", "Barkod" veya "Mal Kodu" başlıklı sütundaki değeri yaz. Genellikle 7-13 haneli sayısal bir koddur. Bu sütun yoksa boş string "" bırak.
-- name: "Mal Hizmet Adı", "Ürün Adı" veya "Açıklama" sütunundaki tam ürün adını yaz.
+- name: "Mal Hizmet Adı" veya "Ürün Adı" sütunundaki tam ürün adını yaz.
 - qty: "Miktar" veya "Adet" sütunundaki tam sayı değeri.
 - ÇOK ÖNEMLİ: Eğer faturada aynı ürün koduna (barcode) veya ismine (name) sahip birden fazla satır varsa, bu satırların miktarlarını (qty) matematiksel olarak TOPLA ve JSON listesine tek bir obje olarak ekle. Aynı ürünü JSON içinde kesinlikle iki kere tekrarlama.
 - Fiyat, KDV, iskonto, ara toplam, genel toplam satırlarını dahil etme.
