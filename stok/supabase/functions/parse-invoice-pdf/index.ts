@@ -10,12 +10,13 @@ const SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const PROMPT = `Sen bir Türk e-fatura uzmanısın. Bu faturadaki tüm ürün kalemlerini ayıkla.
 SADECE aşağıdaki JSON array formatında yanıt ver — başka hiçbir metin, açıklama veya markdown ekleme:
 [{"barcode":"BARKOD","name":"ÜRÜN ADI","qty":ADET}]
+
 Kurallar:
-- barcode: ürün barkod kodu veya ürün kodu (varsa); yoksa boş string ""
-- name: faturadaki tam ürün/mal hizmet adı
-- qty: tam sayı miktar/adet değeri
-- Fiyat, KDV, iskonto, toplam satırlarını dahil etme
-- Yalnızca gerçek mal/hizmet kalemlerini listele`;
+- barcode: Faturadaki "Kod", "Ürün Kodu", "Stok Kodu", "Barkod" veya "Mal Kodu" başlıklı sütundaki değeri yaz. Genellikle 7-13 haneli sayısal bir koddur. Bu sütun yoksa boş string "" bırak.
+- name: "Mal Hizmet Adı", "Ürün Adı" veya "Açıklama" sütunundaki tam ürün adını yaz.
+- qty: "Miktar" veya "Adet" sütunundaki tam sayı değeri.
+- Fiyat, KDV, iskonto, ara toplam, genel toplam satırlarını dahil etme.
+- Yalnızca gerçek mal/hizmet kalemlerini listele.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
