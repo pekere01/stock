@@ -1172,6 +1172,17 @@ async function handleInvoiceUpload(e, mode) {
         if (result?.error) throw new Error(result.error);
         totalProcessed += result.processed || 0;
         totalErrors    += (result.total || 0) - (result.processed || 0);
+        for (const item of (result.items || [])) {
+          logMovement({
+            productId:   item.id,
+            productName: item.name,
+            type:        mode === 'in' ? 'in' : 'sale',
+            quantity:    item.qty,
+            oldStock:    item.old_stock,
+            newStock:    item.new_stock,
+            notes:       mode === 'in' ? 'Gemini Faturası ile otomatik stok girişi' : 'Gemini Faturası ile otomatik stoktan düşüldü',
+          });
+        }
       } catch (fileErr) {
         console.warn(`[INVOICE] ${file.name} işlenemedi:`, fileErr.message);
         totalErrors++;

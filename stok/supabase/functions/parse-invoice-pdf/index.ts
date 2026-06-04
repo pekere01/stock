@@ -98,6 +98,7 @@ Deno.serve(async (req) => {
 
     const pType = invoice_type === "satis" ? 1 : 0;
     let processed = 0;
+    const processedItems: Array<{ id: number; name: string; qty: number; old_stock: number; new_stock: number }> = [];
 
     // Her kalem için handle_invoice_stock RPC çağır (service role)
     for (const item of items) {
@@ -121,11 +122,25 @@ Deno.serve(async (req) => {
         }),
       });
 
-      if (rpcRes.ok) processed++;
+      if (rpcRes.ok) {
+        processed++;
+        try {
+          const rpcData = await rpcRes.json();
+          if (rpcData && !rpcData.error) {
+            processedItems.push({
+              id:        rpcData.id,
+              name:      rpcData.name,
+              qty,
+              old_stock: rpcData.old_stock,
+              new_stock: rpcData.new_stock,
+            });
+          }
+        } catch (_) {}
+      }
     }
 
     return new Response(
-      JSON.stringify({ processed, total: items.length }),
+      JSON.stringify({ processed, total: items.length, items: processedItems }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
