@@ -7,7 +7,7 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const PROMPT = `Sen bir Türk e-fatura uzmanısın. Bu faturadaki tüm ürün kalemlerini ayıkla.
+const PROMPT = `Sen Sonçağ Mühendislik'in fatura okuma asistanısın. Bu faturadaki tüm ürün kalemlerini ayıkla.
 SADECE aşağıdaki JSON array formatında yanıt ver — başka hiçbir metin, açıklama veya markdown ekleme:
 [{"barcode":"BARKOD","name":"ÜRÜN ADI","qty":ADET}]
 
@@ -15,6 +15,7 @@ Kurallar:
 - barcode: Faturadaki "Kod", "Ürün Kodu", "Stok Kodu", "Barkod" veya "Mal Kodu" başlıklı sütundaki değeri yaz. Genellikle 7-13 haneli sayısal bir koddur. Bu sütun yoksa boş string "" bırak.
 - name: "Mal Hizmet Adı", "Ürün Adı" veya "Açıklama" sütunundaki tam ürün adını yaz.
 - qty: "Miktar" veya "Adet" sütunundaki tam sayı değeri.
+- ÇOK ÖNEMLİ: Eğer faturada aynı ürün koduna (barcode) veya ismine (name) sahip birden fazla satır varsa, bu satırların miktarlarını (qty) matematiksel olarak TOPLA ve JSON listesine tek bir obje olarak ekle. Aynı ürünü JSON içinde kesinlikle iki kere tekrarlama.
 - Fiyat, KDV, iskonto, ara toplam, genel toplam satırlarını dahil etme.
 - Yalnızca gerçek mal/hizmet kalemlerini listele.`;
 
@@ -97,15 +98,30 @@ Deno.serve(async (req) => {
       });
     }
 
-    const pType = invoice_type === "satis" ? 1 : 0;
-    let processed = 0;
-    const processedItems: Array<{ id: number; name: string; qty: number; old_stock: number; new_stock: number }> = [];
-
-    // Her kalem için handle_invoice_stock RPC çağır (service role)
+    // JS zırhı: Gemini halüsinasyonuna karşı deterministic tekilleştirme
+    const mergeMap = new Map<string, { barcode: string; name: string; qty: number }>();
     for (const item of items) {
       const barcode = String(item.barcode ?? "").trim();
       const name    = String(item.name    ?? "").trim();
       const qty     = Math.max(1, Math.round(Number(item.qty) || 1));
+      const key     = barcode || name;
+      if (!key) continue;
+      const existing = mergeMap.get(key);
+      if (existing) {
+        existing.qty += qty;
+      } else {
+        mergeMap.set(key, { barcode, name, qty });
+      }
+    }
+    const mergedItems = Array.from(mergeMap.values());
+
+    const pType = invoice_type === "satis" ? 1 : 0;
+    let processed = 0;
+    const processedItems: Array<{ id: number; name: string; qty: number; old_stock: number; new_stock: number }> = [];
+
+    // Her tekilleştirilmiş kalem için handle_invoice_stock RPC çağır (service role)
+    for (const item of mergedItems) {
+      const { barcode, name, qty } = item;
       if (!barcode && !name) continue;
 
       const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/handle_invoice_stock`, {
@@ -141,7 +157,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ processed, total: items.length, items: processedItems }),
+      JSON.stringify({ processed, total: mergedItems.length, items: processedItems }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
