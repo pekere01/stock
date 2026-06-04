@@ -1163,7 +1163,13 @@ async function handleInvoiceUpload(e, mode) {
         const { data: result, error: efErr } = await sb.functions.invoke('parse-invoice-pdf', {
           body: { pdf_base64: base64, invoice_type: invoiceType },
         });
-        if (efErr || result?.error) throw new Error(efErr?.message || result?.error);
+        if (efErr) {
+          let errMsg = efErr.message;
+          try { const b = await efErr.context?.json?.(); if (b?.error) errMsg = b.error; } catch (_) {}
+          console.error('[EF-ERROR]', errMsg);
+          throw new Error(errMsg);
+        }
+        if (result?.error) throw new Error(result.error);
         totalProcessed += result.processed || 0;
         totalErrors    += (result.total || 0) - (result.processed || 0);
       } catch (fileErr) {
