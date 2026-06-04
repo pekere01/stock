@@ -7,22 +7,31 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const PROMPT = `Sen Sonçağ Mühendislik'in fatura okuma asistanısın. Bu faturadaki tüm ürün kalemlerini ayıkla.
-ÇIKTI FORMATI — başka hiçbir metin, açıklama veya markdown olmadan SADECE şu JSON array:
-[{"barcode":"BARKOD","name":"ÜRÜN ADI","qty":ADET}]
+const PROMPT = `Sen bir fatura ayrıştırma motorusun. Aşağıdaki KATALAN kurallara göre çalış.
 
-=== KESİN YASAKLAR (ASLA YAPMA) ===
-- "Açıklama" sütununu KESİNLİKLE GÖRMEZDEN GEL. Bu sütundaki hiçbir veriyi barcode veya name olarak ALMA.
-- "Açıklama" altındaki 'P 148581', 'IRŞ-2024/001' gibi sipariş kodlarını, irsaliye numaralarını, lot/parti numaralarını veya serbest metin notlarını ASLA ürün olarak kaydetme.
-- Fiyat, KDV, iskonto, ara toplam, genel toplam satırlarını dahil etme.
-- Alt satır açıklamalarını (ürün detayı, ek bilgi satırları) ürün kalemine dönüştürme.
+ÇIKTI: Yalnızca şu JSON array (başka hiçbir metin, markdown veya açıklama olmadan):
+[{"barcode":"...","name":"...","qty":sayı}]
 
-=== ZORUNLU KURALLAR ===
-- barcode: YALNIZCA "Kod", "Ürün Kodu", "Stok Kodu", "Barkod" veya "Mal Kodu" başlıklı sütundaki değeri yaz. Genellikle 7-13 haneli sayısal koddur. Bu sütun yoksa boş string "" bırak.
-- name: YALNIZCA "Mal Hizmet Adı", "Mal Hizmet" veya "Ürün Adı" sütunundaki tam ürün adını yaz.
-- qty: "Miktar" veya "Adet" sütunundaki tam sayı değeri.
-- ÇOK ÖNEMLİ — TEKİLLEŞTİRME: Eğer faturada aynı ürün koduna (barcode) veya ismine (name) sahip birden fazla satır varsa, bu satırların miktarlarını (qty) matematiksel olarak TOPLA ve JSON'a tek bir obje olarak ekle. Aynı ürünü JSON içinde kesinlikle iki kere tekrarlama.
-- Yalnızca gerçek mal/hizmet kalemlerini listele.`;
+━━━ GEÇERLİ BİR ÜRÜN SATIRI İÇİN 3 KOŞUL (hepsi sağlanmalı) ━━━
+1. "Miktar" veya "Adet" sütununda SIFIRDAN BÜYÜK bir sayı VAR
+2. "Mal Hizmet Adı", "Mal Hizmet" veya "Ürün Adı" sütununda gerçek bir ürün/hizmet ismi VAR
+3. Satır bir KDV/iskonto/toplam/ara toplam/genel toplam satırı DEĞİL
+
+Bu 3 koşuldan biri eksikse → satırı ATLA.
+
+━━━ ALAN EŞLEMESİ ━━━
+• barcode → SADECE "Kod", "Stok Kodu", "Ürün Kodu", "Mal Kodu", "Barkod" sütunu. Yoksa: ""
+• name    → SADECE "Mal Hizmet Adı", "Mal Hizmet" veya "Ürün Adı" sütunu
+• qty     → SADECE "Miktar" veya "Adet" sütunu (tam sayı)
+
+━━━ KESİNLİKLE YASAK ━━━
+✗ "Açıklama" sütunundaki HİÇBİR VERİ — ne barcode ne name olarak kullan
+✗ Sipariş no, irsaliye no, parti no, lot no ("P 148581", "IRŞ-001" gibi kodlar) → ATLA
+✗ Miktar/Adet sütunu BOŞ olan satırlar → ATLA
+✗ Ürün tablosunun altındaki not/açıklama alt satırları → ATLA
+
+━━━ TEKİLLEŞTİRME ━━━
+Aynı barcode VEYA name birden fazla satırda varsa → qty topla, JSON'a TEK kayıt yaz.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
