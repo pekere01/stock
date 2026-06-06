@@ -1158,18 +1158,19 @@ async function handleInvoiceUpload(e, mode) {
           }
           continue;
         }
-        // PDF → Gemini Edge Function
+        // PDF → Vercel Serverless Function
         const base64 = await fileToBase64(file);
-        const { data: result, error: efErr } = await sb.functions.invoke('parse-invoice-pdf', {
-          body: { pdf_base64: base64, invoice_type: invoiceType },
+        const session = (await sb.auth.getSession()).data.session;
+        const fetchRes = await fetch('/api/parse-invoice', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token ?? ''}`,
+          },
+          body: JSON.stringify({ pdf_base64: base64, invoice_type: invoiceType }),
         });
-        if (efErr) {
-          let errMsg = efErr.message;
-          try { const b = await efErr.context?.json?.(); if (b?.error) errMsg = b.error; } catch (_) {}
-          console.error('[EF-ERROR]', errMsg);
-          throw new Error(errMsg);
-        }
-        if (result?.error) throw new Error(result.error);
+        const result = await fetchRes.json();
+        if (!fetchRes.ok || result?.error) throw new Error(result?.error || `HTTP ${fetchRes.status}`);
         totalProcessed += result.processed || 0;
         totalErrors    += (result.total || 0) - (result.processed || 0);
         for (const item of (result.items || [])) {
