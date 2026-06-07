@@ -1,5 +1,5 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? '';
-const SUPABASE_URL   = process.env.SUPABASE_URL ?? '';
+const SUPABASE_URL   = (process.env.SUPABASE_URL ?? '').replace(/\/$/, '');
 const SERVICE_ROLE   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 const PROMPT = `Sen bir fatura ayrıştırma motorusun. Aşağıdaki KATALAN kurallara göre çalış.
