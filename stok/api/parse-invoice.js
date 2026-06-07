@@ -28,7 +28,7 @@ Bu 3 koşuldan biri eksikse → satırı ATLA.
 ━━━ TEKİLLEŞTİRME ━━━
 Aynı barcode VEYA name birden fazla satırda varsa → qty topla, JSON'a TEK kayıt yaz.`;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type');
 
