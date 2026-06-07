@@ -24,6 +24,10 @@ supabase/functions/**/graphify-out/
 *.rar
 *.zip
 
+# Env secrets
+.env.local
+.env
+
 # Windows
 nul
 Thumbs.db
