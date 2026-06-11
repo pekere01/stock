@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
           { inline_data: { mime_type: "application/pdf", data: pdf_base64 } },
         ],
       }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
     });
 
     let geminiRes!: Response;
