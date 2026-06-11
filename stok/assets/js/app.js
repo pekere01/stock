@@ -1158,14 +1158,16 @@ async function handleInvoiceUpload(e, mode) {
           }
           continue;
         }
-        // PDF → Vercel Serverless Function
+        // PDF → Supabase Edge Function (2-dakika timeout)
         const base64 = await fileToBase64(file);
         const session = (await sb.auth.getSession()).data.session;
-        const fetchRes = await fetch('/api/parse-invoice', {
+        const token = session?.access_token || SUPABASE_KEY;
+        const fetchRes = await fetch(`${SUPABASE_URL}/functions/v1/parse-invoice-pdf`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token ?? ''}`,
+            'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_KEY,
           },
           body: JSON.stringify({ pdf_base64: base64, invoice_type: invoiceType }),
         });

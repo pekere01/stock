@@ -63,26 +63,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Gemini 1.5 Flash — PDF inline data olarak gönder
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: PROMPT },
-              { inline_data: { mime_type: "application/pdf", data: pdf_base64 } },
-            ],
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 8192,
-          },
-        }),
-      }
-    );
+    const geminiBody = JSON.stringify({
+      contents: [{
+        parts: [
+          { text: PROMPT },
+          { inline_data: { mime_type: "application/pdf", data: pdf_base64 } },
+        ],
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    });
+
+    let geminiRes!: Response;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: geminiBody }
+      );
+      if (geminiRes.status !== 503 && geminiRes.status !== 429) break;
+      if (attempt < 4) await new Promise(r => setTimeout(r, attempt * 3000));
+    }
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
