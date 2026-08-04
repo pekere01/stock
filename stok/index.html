@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script type="module" src="./assets/js/app.js"></script>
+  <script type="module" src="./assets/js/review.js"></script>
 <link rel="icon" type="image/jpeg" href="./logo.jfif">
 <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -73,6 +74,9 @@
         <button class="btn btn-admin" id="admin-panel-btn" onclick="openAdminPanel()" style="display:none;" title="Yönetim Paneli">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           Yönetim
+        </button>
+        <button class="btn btn-secondary" id="review-panel-btn" onclick="openReviewPanel()" title="İnceleme Bekleyenler">
+          İnceleme Bekleyenler
         </button>
         <div class="user-widget" id="user-widget" style="display:none;">
           <div class="user-avatar" id="user-avatar">?</div>
@@ -410,6 +414,34 @@
         <tbody id="admin-logs-body">
           <tr><td colspan="6"><div class="admin-empty">Yükleniyor…</div></td></tr>
         </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== İNCELEME BEKLEYENLER PANELİ ===== -->
+<div class="admin-panel hidden" id="review-panel">
+  <div class="admin-panel-header">
+    <button class="btn btn-secondary" onclick="closeReviewPanel()">← Dashboard'a Dön</button>
+    <div class="admin-panel-title">İnceleme Bekleyenler</div>
+  </div>
+
+  <h3>SCT — Test / Konsinye</h3>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Stok Kod</th><th>İrsaliye No</th><th>Miktar</th><th>Kaç Gündür Faturasız</th><th>İşlem</th></tr></thead>
+        <tbody id="review-table-sct-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Diğer / Beklenmedik</h3>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Stok Kod</th><th>İrsaliye No</th><th>Miktar</th><th>Kaç Gündür Faturasız</th><th>İşlem</th></tr></thead>
+        <tbody id="review-table-diger-body"></tbody>
       </table>
     </div>
   </div>

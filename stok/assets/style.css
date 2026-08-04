@@ -1605,3 +1605,6 @@
 
   /* ==== SELECTION ==== */
   ::selection { background: rgba(59,130,246,0.3); color: var(--text-primary); }
+
+  /* ==== REVIEW PANEL (Faturasız İnceleme) ==== */
+  #review-panel h3 { margin: 20px 0 10px; font-size: 15px; color: var(--text-secondary); }
