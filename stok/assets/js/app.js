@@ -1253,15 +1253,8 @@ async function applyInvoiceStock(items, mode) {
       p_type:    isAlim ? 0 : 1,
     });
     if (error || !data) { notFound++; continue; }
-    logMovement({
-      productId:   data?.id   || null,
-      productName: data?.name || name || barcode,
-      type:        isAlim ? 'in' : 'sale',
-      quantity:    qty,
-      oldStock:    data?.old_stock ?? null,
-      newStock:    data?.new_stock ?? null,
-      notes:       isAlim ? 'E-Fatura ile otomatik stok girişi' : 'E-Fatura ile otomatik stoktan düşüldü',
-    });
+    // handle_invoice_stock artık kendi audit satırını yazıyor (auth.uid() ile) —
+    // burada tekrar logMovement çağırmak çift kayıt oluşturur.
     updated++;
   }
   return { updated, notFound };
