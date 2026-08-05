@@ -85,6 +85,7 @@ function dbToProduct(row) {
     depo:         row.warehouse_info || '',
     purchaseRate: row.purchase_rate || null,
     saleRate:     row.sale_rate    || null,
+    inTest:       row.in_test      || false,
     createdAt:    row.created_at
   };
 }
@@ -102,7 +103,8 @@ function productToDb(p) {
     status:         p.status    || 'active',
     warehouse_info: p.depo      || null,
     purchase_rate:  p.purchaseRate || null,
-    sale_rate:      p.saleRate  || null
+    sale_rate:      p.saleRate  || null,
+    in_test:        !!p.inTest
   };
 }
 
@@ -429,7 +431,7 @@ function renderTable() {
     tr.style.animationDelay = `${idx * 0.02}s`;
     tr.innerHTML = `
         <td>
-          <div class="product-name">${escapeHtml(p.name)}</div>
+          <div class="product-name">${escapeHtml(p.name)}${p.inTest ? '<span class="badge in-test" title="Test / Konsinye Takibinde">TEST</span>' : ''}</div>
           <div class="product-barcode">${escapeHtml(p.barcode)}</div>
         </td>
         <td><span class="badge" style="border-color:${getCategoryColor(p.category)}40;color:${getCategoryColor(p.category)}">${escapeHtml(p.category)}</span></td>
@@ -536,6 +538,7 @@ export function openAddModal() {
   editingId = null;
   document.getElementById('modal-title').textContent = 'Yeni Ürün Ekle';
   document.getElementById('product-form').reset();
+  document.getElementById('f-in-test').checked = false;
   document.getElementById('form-error').textContent = '';
   document.getElementById('price-field-wrapper').style.display = 'none';
   document.getElementById('product-modal').classList.add('visible');
@@ -554,6 +557,7 @@ export function openEditModal(id) {
   document.getElementById('f-cost').value    = p.cost > 0 ? p.cost : '';
   document.getElementById('f-depo').value    = p.depo || '';
   document.getElementById('f-price').value   = p.price > 0 ? p.price : '';
+  document.getElementById('f-in-test').checked = !!p.inTest;
   document.getElementById('form-error').textContent = '';
   document.getElementById('price-field-wrapper').style.display = '';
   const stockField = document.getElementById('f-stock').closest('.form-field');
@@ -573,6 +577,7 @@ export async function submitProductForm(e) {
   const cost     = parseFloat(document.getElementById('f-cost').value) || 0;
   const price    = parseFloat(document.getElementById('f-price').value) || 0;
   const depo     = document.getElementById('f-depo').value.trim();
+  const inTest   = document.getElementById('f-in-test').checked;
   const errEl    = document.getElementById('form-error');
   const saveBtn  = e.target.querySelector('button[type="submit"]');
   errEl.textContent = '';
@@ -612,16 +617,16 @@ export async function submitProductForm(e) {
 
     if (editingId) {
       const p = products.find(x => x.id === editingId);
-      const dbRow = productToDb({ ...p, name, barcode, category, stock, minStock, cost, price, depo });
+      const dbRow = productToDb({ ...p, name, barcode, category, stock, minStock, cost, price, depo, inTest });
       const { error } = await sb.from('products').update(dbRow).eq('id', editingId);
       if (error) throw error;
       const oldStock = p.stock; const oldPrice = p.price;
-      Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo });
+      Object.assign(p, { name, barcode, category, stock, minStock, cost, price, depo, inTest });
       p.status = calcStatus(p);
       logMovement({ productId: p.id, productName: name, type: 'edit', oldStock, newStock: stock, oldPrice, newPrice: price });
       toast('Ürün güncellendi');
     } else {
-      const newPdata = { name, barcode, category, depo, cost, price: 0, stock, minStock, sales7d: 0, purchaseRate: eurRate };
+      const newPdata = { name, barcode, category, depo, cost, price: 0, stock, minStock, sales7d: 0, purchaseRate: eurRate, inTest };
       newPdata.status = calcStatus({ stock, minStock });
       const { data, error } = await sb.from('products').insert(productToDb(newPdata)).select().single();
       if (error) throw error;

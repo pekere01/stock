@@ -1608,3 +1608,9 @@
 
   /* ==== REVIEW PANEL (Faturasız İnceleme) ==== */
   #review-panel h3 { margin: 20px 0 10px; font-size: 15px; color: var(--text-secondary); }
+
+  /* ==== IN-TEST TOGGLE ==== */
+  .form-field-checkbox { flex-direction: row; align-items: center; gap: 8px; }
+  .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+  .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .badge.in-test { border-color: #f59e0b40; color: #f59e0b; margin-left: 6px; }
