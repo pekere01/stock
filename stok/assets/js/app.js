@@ -1592,7 +1592,7 @@ function renderHistory() {
       <td style="font-size:11px;color:var(--text-secondary)">${escapeHtml(r.user_email || '—')}</td>
       <td><span style="color:${meta.color};font-size:12px;font-weight:500">${meta.label}</span></td>
       <td>${stockHtml}</td>
-      <td style="font-size:11px;color:var(--text-secondary);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${detailHtml || '—'}</td>
+      <td style="font-size:11px;color:var(--text-secondary);max-width:140px;overflow-x:auto;white-space:nowrap;scrollbar-width:thin">${detailHtml || '—'}</td>
     </tr>`;
   }).join('');
 }
