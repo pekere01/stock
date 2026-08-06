@@ -946,12 +946,53 @@ async function cycleCategoryColor(name) {
 }
 
 /* ===== CSV EXPORT ===== */
-export function exportCSV() {
-  if (totalCount > PAGE_SIZE) {
-    toast(`Uyarı: Yalnızca bu sayfa (${products.length} ürün) dışa aktarılıyor. Toplam ${totalCount.toLocaleString('tr-TR')} ürün var.`, 'warn');
+const EXPORT_FILTER_SUFFIX = {
+  '':             'tum-urunler',
+  active:         'aktif',
+  low_stock:      'dusuk-stok',
+  out_of_stock:   'tukendi',
+};
+
+export function openExportModal() {
+  document.getElementById('export-modal').classList.add('visible');
+}
+export function closeExportModal() {
+  document.getElementById('export-modal').classList.remove('visible');
+}
+export function closeExportOnOverlay(e) { if (e.target.id === 'export-modal') closeExportModal(); }
+
+export async function exportCSV(status = '') {
+  closeExportModal();
+  toast('Excel hazırlanıyor…');
+  try {
+    const rows = await fetchAllProductsForExport(status);
+    if (!rows.length) { toast('Bu filtrede ürün bulunamadı', 'warn'); return; }
+    downloadProductsCSV(rows, EXPORT_FILTER_SUFFIX[status] ?? 'tum-urunler');
+  } catch (err) {
+    toast('Dışa aktarma hatası: ' + (err.message || err), 'error');
   }
+}
+
+async function fetchAllProductsForExport(status) {
+  const CHUNK = 1000;
+  let from = 0, all = [];
+  while (true) {
+    let q = sb.from('products').select('*').order('created_at', { ascending: false });
+    if (status === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
+    else if (status)         q = q.eq('status', status);
+    q = q.range(from, from + CHUNK - 1);
+    const { data, error } = await q;
+    if (error) throw error;
+    all = all.concat((data || []).map(dbToProduct));
+    if (!data || data.length < CHUNK) break;
+    from += CHUNK;
+  }
+  return all;
+}
+
+function downloadProductsCSV(rows, suffix) {
   const headers = ['ID', 'Ürün Adı', 'Barkod No', 'Kategori', 'Depo', 'Fiyat (€)', 'Maliyet (€)', 'Kar Marji (%)', 'Stok', 'Min. Stok', '7g Satış', 'Stok Değeri', 'Durum'];
-  const rows = products.map(p => {
+  const csvRows = rows.map(p => {
     const margin = p.price > 0 ? ((p.price - p.cost) / p.price * 100).toFixed(2) : 0;
     return [
       p.id, p.name, p.barcode, p.category, p.depo || '',
@@ -962,7 +1003,7 @@ export function exportCSV() {
       statusLabel(calcStatus(p))
     ];
   });
-  const csv = [headers, ...rows].map(row =>
+  const csv = [headers, ...csvRows].map(row =>
     row.map(cell => {
       const s = String(cell);
       return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -973,12 +1014,12 @@ export function exportCSV() {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `stok-raporu-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `stok-raporu-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  toast('CSV indirildi');
+  toast(`${rows.length} ürün indirildi`);
 }
 
 /* ===== EUR/TRY KURU ===== */
@@ -1621,6 +1662,9 @@ window.closeCategoryModal        = closeCategoryModal;
 window.closeCategoryOnOverlay    = closeCategoryOnOverlay;
 window.submitNewCategory         = submitNewCategory;
 window.exportCSV                 = exportCSV;
+window.openExportModal           = openExportModal;
+window.closeExportModal          = closeExportModal;
+window.closeExportOnOverlay      = closeExportOnOverlay;
 window.openImportModal           = openImportModal;
 window.closeImportModal          = closeImportModal;
 window.closeImportOnOverlay      = closeImportOnOverlay;
