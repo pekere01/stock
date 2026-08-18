@@ -1,11 +1,17 @@
--- Elle geriye dönük işlenen faturalarda (ör. Docker/n8n kesintisi sonrası yakalanan
--- eski irsaliyeler) stock_movements.created_at hep "işlendiği an" oluyordu, gerçek
--- irsaliye/fatura tarihi değil. Artık handle_invoice_stock isteğe bağlı p_movement_date
--- parametresi alıyor; verilirse created_at olarak o kullanılıyor, verilmezse now() (eski
--- davranış). stokv2 workflow'u Mikro'nun sth_create_date'ini (fatura_saati) bu parametreye
--- geçecek şekilde güncellendi.
+-- Mikro'dan gelen bileme/kaplama irsaliyeleri sth_stok_kod='BİLEME' placeholder'ını
+-- kullanıyor (gerçek ürün adı sth_aciklama alanında, örn. "ATMSAN-SD-D50-"). Bu satırlar
+-- normal ürün eşleştirmesine düşünce (barkod/isim bulunamıyor) 0 stoklu fantom bir
+-- "BİLEME KAPLAMA" ürünü otomatik oluşturuluyor ve stock_movements'a type='sale' olarak
+-- yazılıyor — site bunu gerçek bir satış gibi gösteriyor. Artık BİLEME barkodu ayrı
+-- işleniyor: ürün oluşturma/stok güncelleme yok, sadece type='bileme_kaplama' ile
+-- bilgilendirme amaçlı bir hareket kaydı düşülüyor (hangi ürünün gittiği p_detail'den).
+--
+-- NOT: CREATE OR REPLACE parametre listesi değişince eski imzayı REPLACE etmez, yeni bir
+-- overload olarak ekler (2026-08-17'de PGRST203'e yol açan hatanın aynısı) — bu yüzden eski
+-- 5 parametreli imza önce açıkça DROP ediliyor.
+DROP FUNCTION IF EXISTS public.handle_invoice_stock(text, text, integer, integer, timestamp with time zone);
 
-CREATE OR REPLACE FUNCTION public.handle_invoice_stock(p_barcode text, p_name text DEFAULT ''::text, p_qty integer DEFAULT 1, p_type integer DEFAULT 0, p_movement_date timestamptz DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.handle_invoice_stock(p_barcode text, p_name text DEFAULT ''::text, p_qty integer DEFAULT 1, p_type integer DEFAULT 0, p_movement_date timestamp with time zone DEFAULT NULL::timestamp with time zone, p_detail text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -29,6 +35,20 @@ BEGIN
                      ELSE 'E-Fatura ile otomatik stok güncellemesi (RPC)'
                    END;
   v_created_at  := COALESCE(p_movement_date, now());
+
+  -- Bileme/kaplama irsaliyesi: gerçek ürün eşleştirme yapma, satış sayma.
+  IF v_eff_barcode = 'BİLEME' THEN
+    INSERT INTO stock_movements (product_id, product_name, user_id, user_email, type, quantity, old_stock, new_stock, notes, created_at)
+    VALUES (
+      NULL,
+      COALESCE(NULLIF(TRIM(p_detail), ''), v_eff_name, 'Bileme/Kaplama'),
+      auth.uid(), auth.email(), 'bileme_kaplama', p_qty, NULL, NULL,
+      v_notes || ' — bileme/kaplamaya gönderildi',
+      v_created_at
+    );
+
+    RETURN json_build_object('skipped', true, 'reason', 'bileme_kaplama', 'detail', p_detail);
+  END IF;
 
   IF v_eff_barcode IS NOT NULL THEN
     SELECT * INTO v_product FROM products WHERE barcode = v_eff_barcode LIMIT 1;
@@ -91,7 +111,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $function$;
 
--- Güvenlik: Yeni imza (5 parametre) eklendiği için varsayılan olarak PUBLIC'e execute izni verildi.
--- Bunu geri alıp sadece authenticated kullanıcılara (ve service_role'a) bırakıyoruz.
-REVOKE EXECUTE ON FUNCTION public.handle_invoice_stock(text, text, integer, integer, timestamptz) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.handle_invoice_stock(text, text, integer, integer, timestamptz) FROM anon;
+-- Geriye dönük temizlik: tek bir hatalı BİLEME "satış" kaydı ve fantom ürünü kaldır.
+DELETE FROM stock_movements WHERE product_id = 46733 AND type = 'sale';
+DELETE FROM products WHERE id = 46733 AND barcode = 'BİLEME';

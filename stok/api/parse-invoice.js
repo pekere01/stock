@@ -34,9 +34,22 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!req.headers.authorization) return res.status(401).json({ error: 'Yetkisiz' });
+  
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Yetkisiz' });
+  
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  if (!token) return res.status(401).json({ error: 'Yetkisiz' });
 
   const { pdf_base64, invoice_type = 'alis' } = req.body;
+
+  // Token'ı Supabase Auth üzerinden doğrula
+  const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!userRes.ok) {
+    return res.status(401).json({ error: 'Geçersiz veya süresi dolmuş token' });
+  }
 
   if (!pdf_base64) return res.status(400).json({ error: 'pdf_base64 eksik' });
   if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY Vercel env vars\'a eklenmemiş' });

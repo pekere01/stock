@@ -28,6 +28,12 @@ supabase/functions/**/graphify-out/
 .env.local
 .env
 
+# Pentest çıktıları (PoC/secret içerebilir, asla push edilmez)
+strix_runs/
+
+# n8n export'ları — hardcoded service_role JWT içeriyor, asla push edilmez
+n8n-workflow*.json
+
 # Windows
 nul
 Thumbs.db

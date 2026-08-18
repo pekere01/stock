@@ -38,8 +38,21 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (!req.headers.get("Authorization")) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
     return new Response(JSON.stringify({ error: "Yetkisiz" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  
+  if (!userRes.ok) {
+    return new Response(JSON.stringify({ error: "Geçersiz veya süresi dolmuş token" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1604,6 +1604,7 @@ function renderHistory() {
     in:           { label: '↑ Stok Girişi',    color: 'var(--success)' },
     out:          { label: '↓ Stok Çıkışı',    color: 'var(--error)' },
     sale:         { label: '🛒 Satış',          color: '#f97316' },
+    bileme_kaplama: { label: '🔧 Bileme/Kaplama', color: '#a855f7' },
     edit:         { label: 'Düzenlendi',        color: 'var(--accent)' },
     price_change: { label: 'Fiyat Değişti',     color: 'var(--warning)' },
     import:       { label: '↑ İçe Aktarıldı',  color: '#8b5cf6' },
