@@ -484,6 +484,14 @@ export function populateFilters() {
   fc.innerHTML = '<option value="">Seçiniz...</option>' +
     categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
   if (currentFc && categories.some(c => c.name === currentFc)) fc.value = currentFc;
+
+  const ec = document.getElementById('export-category');
+  if (ec) {
+    const currentEc = ec.value;
+    ec.innerHTML = '<option value="">Tüm Kategoriler</option>' +
+      categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+    if (currentEc && categories.some(c => c.name === currentEc)) ec.value = currentEc;
+  }
 }
 
 /* ===== ALERT BANNER ===== */
@@ -962,24 +970,37 @@ export function closeExportModal() {
 export function closeExportOnOverlay(e) { if (e.target.id === 'export-modal') closeExportModal(); }
 
 export async function exportCSV(status = '') {
+  const categoryEl = document.getElementById('export-category');
+  const category = categoryEl ? categoryEl.value : '';
   closeExportModal();
   toast('Excel hazırlanıyor…');
   try {
-    const rows = await fetchAllProductsForExport(status);
+    const rows = await fetchAllProductsForExport(status, category);
     if (!rows.length) { toast('Bu filtrede ürün bulunamadı', 'warn'); return; }
-    downloadProductsCSV(rows, EXPORT_FILTER_SUFFIX[status] ?? 'tum-urunler');
+    const suffix = category
+      ? `${EXPORT_FILTER_SUFFIX[status] ?? 'tum-urunler'}-${slugify(category)}`
+      : (EXPORT_FILTER_SUFFIX[status] ?? 'tum-urunler');
+    downloadProductsCSV(rows, suffix);
   } catch (err) {
     toast('Dışa aktarma hatası: ' + (err.message || err), 'error');
   }
 }
 
-async function fetchAllProductsForExport(status) {
+function slugify(s) {
+  return String(s).trim().toLowerCase()
+    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+    .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+async function fetchAllProductsForExport(status, category = '') {
   const CHUNK = 1000;
   let from = 0, all = [];
   while (true) {
     let q = sb.from('products').select('*').order('created_at', { ascending: false });
     if (status === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
     else if (status)         q = q.eq('status', status);
+    if (category)            q = q.eq('category', category);
     q = q.range(from, from + CHUNK - 1);
     const { data, error } = await q;
     if (error) throw error;
