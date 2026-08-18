@@ -176,7 +176,12 @@ function toast(msg, type = 'success') {
   const t = document.getElementById('toast');
   if (!t) return;
   t.className = 'toast ' + type;
-  t.innerHTML = `<span>${type === 'success' ? '✓' : '✕'}</span> <span>${msg}</span>`;
+  t.textContent = '';
+  const icon = document.createElement('span');
+  icon.textContent = type === 'success' ? '✓' : '✕';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  t.append(icon, ' ', text);
   t.classList.add('visible');
   setTimeout(() => t.classList.remove('visible'), 2400);
 }

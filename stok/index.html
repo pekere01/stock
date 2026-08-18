@@ -43,8 +43,10 @@
       <button type="submit" class="btn btn-primary auth-submit" id="auth-submit-btn">Giriş Yap</button>
     </form>
     <div class="auth-footer-note">Verilerin Supabase üzerinden güvenle saklanır.</div>
+    <div class="auth-copyright">© <span id="copyright-year"></span> Sonçağ</div>
   </div>
 </div>
+<script>document.getElementById('copyright-year').textContent = new Date().getFullYear();</script>
 
 <!-- ===== APP ROOT (gizli, login sonrası görünür) ===== -->
 <div class="app-root hidden" id="app-root">

@@ -175,6 +175,13 @@
     font-size: 12px;
     margin-top: 16px;
   }
+  .auth-copyright {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 8px;
+  }
 
   /* ==== USER WIDGET (header) ==== */
   .user-widget {

@@ -6,14 +6,36 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function escapeHtml(s: unknown): string {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Frontend bu fonksiyonu girişli kullanıcının kendi session token'ıyla çağırıyor
+  // (bkz. app.js triggerLowStockAlert) — service_role key ile değil. Token'ı Supabase
+  // Auth üzerinden doğrula (parse-invoice.js'deki kalıpla aynı).
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader || authHeader !== `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`) {
+  const token = authHeader?.replace(/^Bearer\s+/i, "");
+  if (!token) {
     return new Response(JSON.stringify({ error: "Yetkisiz erişim" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const userRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    },
+  });
+  if (!userRes.ok) {
+    return new Response(JSON.stringify({ error: "Geçersiz veya süresi dolmuş token" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -54,7 +76,7 @@ Deno.serve(async (req) => {
       },
     });
 
-    const subject = `[Sonçağ Stok Uyarı] ${productName} Stok Seviyesi Kritik!`;
+    const subject = `[Sonçağ Stok Uyarı] ${String(productName ?? "").replace(/[\r\n]/g, " ")} Stok Seviyesi Kritik!`;
     const stockRatio =
       minStock > 0 ? Math.round((newStock / minStock) * 100) : 0;
 
@@ -64,8 +86,8 @@ Deno.serve(async (req) => {
   <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1);">
     <div style="background:#ef4444;padding:24px 28px;">
       <div style="color:rgba(255,255,255,0.8);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">&#9888; Kritik Stok Uyarısı</div>
-      <div style="color:white;font-size:22px;font-weight:700;line-height:1.3;">${productName}</div>
-      ${productBarcode ? `<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:5px;font-family:monospace;">${productBarcode}</div>` : ""}
+      <div style="color:white;font-size:22px;font-weight:700;line-height:1.3;">${escapeHtml(productName)}</div>
+      ${productBarcode ? `<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:5px;font-family:monospace;">${escapeHtml(productBarcode)}</div>` : ""}
     </div>
     <div style="padding:28px;">
       <table style="width:100%;border-collapse:collapse;">
@@ -79,7 +101,7 @@ Deno.serve(async (req) => {
         </tr>
         ${depo ? `<tr>
           <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Depo</td>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:500;font-size:13px;color:#374151;">${depo}</td>
+          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:500;font-size:13px;color:#374151;">${escapeHtml(depo)}</td>
         </tr>` : ""}
         <tr>
           <td style="padding:11px 0;color:#6b7280;font-size:13px;">Doluluk Oranı</td>

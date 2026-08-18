@@ -266,7 +266,7 @@ function renderPie() {
     </div>`).join('');
 
   wrap.querySelectorAll('.pie-slice').forEach(el => {
-    el.addEventListener('mousemove', e => showTooltip(e, `${el.dataset.label}<br><b>${el.dataset.value} ürün</b> · ${el.dataset.pct}%`));
+    el.addEventListener('mousemove', e => showTooltip(e, `${escapeHtml(el.dataset.label)}<br><b>${escapeHtml(el.dataset.value)} ürün</b> · ${escapeHtml(el.dataset.pct)}%`));
     el.addEventListener('mouseleave', hideTooltip);
   });
 }
@@ -330,7 +330,7 @@ function renderPieFromSummary() {
     </div>`).join('');
 
   wrap.querySelectorAll('.pie-slice').forEach(el => {
-    el.addEventListener('mousemove', e => showTooltip(e, `${el.dataset.label}<br><b>${el.dataset.value} ürün</b> · ${el.dataset.pct}%`));
+    el.addEventListener('mousemove', e => showTooltip(e, `${escapeHtml(el.dataset.label)}<br><b>${escapeHtml(el.dataset.value)} ürün</b> · ${escapeHtml(el.dataset.pct)}%`));
     el.addEventListener('mouseleave', hideTooltip);
   });
 }
@@ -381,7 +381,7 @@ function renderBar() {
   html += `</svg>`;
   wrap.innerHTML = html;
   wrap.querySelectorAll('.bar-rect').forEach(el => {
-    el.addEventListener('mousemove', e => showTooltip(e, `${el.dataset.label}<br><b>${el.dataset.value} satış</b>`));
+    el.addEventListener('mousemove', e => showTooltip(e, `${escapeHtml(el.dataset.label)}<br><b>${escapeHtml(el.dataset.value)} satış</b>`));
     el.addEventListener('mouseleave', () => { hideTooltip(); el.style.filter = ''; });
     el.addEventListener('mouseenter', () => el.style.filter = 'brightness(1.2)');
   });
@@ -1145,10 +1145,24 @@ function toggleDropdown(id) {
   document.querySelectorAll('.dropdown').forEach(d => {
     if (d.id !== `dropdown-${id}`) d.classList.remove('open');
   });
-  document.getElementById(`dropdown-${id}`)?.classList.toggle('open');
+  const dropdown = document.getElementById(`dropdown-${id}`);
+  dropdown?.classList.toggle('open');
+  if (dropdown?.classList.contains('open')) clampDropdownToViewport(dropdown);
 }
 function closeDropdowns() {
   document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
+}
+// Dar ekranlarda dropdown-menu (right:0 ankajlı) viewport'un solundan taşabiliyor — açılınca ölçüp düzelt.
+function clampDropdownToViewport(dropdown) {
+  const menu = dropdown.querySelector('.dropdown-menu');
+  if (!menu) return;
+  menu.style.left = '';
+  const rect = menu.getBoundingClientRect();
+  const margin = 8;
+  if (rect.left < margin) {
+    menu.style.right = 'auto';
+    menu.style.left = `${margin - dropdown.getBoundingClientRect().left}px`;
+  }
 }
 
 /* ===== PAGINATION BRIDGE ===== */
