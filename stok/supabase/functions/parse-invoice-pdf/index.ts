@@ -1,11 +1,28 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Prod domain sabit; yerelde geliştirirken localhost otomatik izinli.
+// Custom domain bağlandığında ALLOWED_ORIGINS'e ekleyin.
+const ALLOWED_ORIGINS = new Set(["https://soncagstock.vercel.app"]);
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  return {
+    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? origin! : "https://soncagstock.vercel.app",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+// PDF için 5MB üst sınır. base64 kodlaması ham veriden ~%33 büyük olduğu için
+// sınır, base64 karakter sayısına göre hesaplanıyor.
+const MAX_PDF_BYTES = 5 * 1024 * 1024;
+const MAX_BASE64_CHARS = Math.ceil(MAX_PDF_BYTES * 4 / 3);
 
 const PROMPT = `Sen bir fatura ayrıştırma motorusun. Aşağıdaki KATALAN kurallara göre çalış.
 
@@ -34,6 +51,7 @@ Bu 3 koşuldan biri eksikse → satırı ATLA.
 Aynı barcode VEYA name birden fazla satırda varsa → qty topla, JSON'a TEK kayıt yaz.`;
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -65,6 +83,13 @@ Deno.serve(async (req) => {
     if (!pdf_base64) {
       return new Response(JSON.stringify({ error: "pdf_base64 eksik" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (pdf_base64.length > MAX_BASE64_CHARS) {
+      return new Response(JSON.stringify({ error: "PDF çok büyük (maks. 5MB)" }), {
+        status: 413,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

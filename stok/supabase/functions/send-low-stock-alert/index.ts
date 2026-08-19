@@ -1,10 +1,22 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Prod domain sabit; yerelde geliştirirken localhost otomatik izinli.
+// Custom domain bağlandığında ALLOWED_ORIGINS'e ekleyin.
+const ALLOWED_ORIGINS = new Set(["https://soncagstock.vercel.app"]);
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  return {
+    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? origin! : "https://soncagstock.vercel.app",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 function escapeHtml(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -13,6 +25,7 @@ function escapeHtml(s: unknown): string {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

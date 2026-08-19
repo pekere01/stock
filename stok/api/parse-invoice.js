@@ -2,6 +2,11 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? '';
 const SUPABASE_URL   = (process.env.SUPABASE_URL ?? '').replace(/\/$/, '');
 const SERVICE_ROLE   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
+// PDF için 5MB üst sınır. base64 kodlaması ham veriden ~%33 büyük olduğu için
+// sınır, base64 karakter sayısına göre hesaplanıyor.
+const MAX_PDF_BYTES = 5 * 1024 * 1024;
+const MAX_BASE64_CHARS = Math.ceil(MAX_PDF_BYTES * 4 / 3);
+
 const PROMPT = `Sen bir fatura ayrıştırma motorusun. Aşağıdaki KATALAN kurallara göre çalış.
 
 ÇIKTI: Yalnızca şu JSON array (başka hiçbir metin, markdown veya açıklama olmadan):
@@ -28,9 +33,20 @@ Bu 3 koşuldan biri eksikse → satırı ATLA.
 ━━━ TEKİLLEŞTİRME ━━━
 Aynı barcode VEYA name birden fazla satırda varsa → qty topla, JSON'a TEK kayıt yaz.`;
 
+// Prod domain sabit; yerelde geliştirirken localhost otomatik izinli.
+// Custom domain bağlandığında ALLOWED_ORIGINS'e ekleyin.
+const ALLOWED_ORIGINS = new Set(['https://soncagstock.vercel.app']);
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
 module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  res.setHeader('Access-Control-Allow-Origin', isAllowedOrigin(origin) ? origin : 'https://soncagstock.vercel.app');
   res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -52,6 +68,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (!pdf_base64) return res.status(400).json({ error: 'pdf_base64 eksik' });
+  if (pdf_base64.length > MAX_BASE64_CHARS) return res.status(413).json({ error: 'PDF çok büyük (maks. 5MB)' });
   if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY Vercel env vars\'a eklenmemiş' });
 
   try {

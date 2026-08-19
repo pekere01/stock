@@ -3,7 +3,8 @@ import { currentUser, currentPermissions, isAdmin, canDo, isViewOnly, logAction,
 import {
   fmtTL, fmtTLShort, fmtEUR, fmtEURShort,
   escapeHtml, animateCounter, calcStatus, statusLabel,
-  showTooltip, hideTooltip, toast, showConfirm, closeConfirmModal
+  showTooltip, hideTooltip, toast, showConfirm, closeConfirmModal,
+  friendlyError
 } from './ui.js';
 import { closePermModal } from './admin.js';
 
@@ -143,7 +144,7 @@ export async function loadData(page = 0, recount = true) {
     }
   } catch (err) {
     console.error('Veri yükleme hatası:', err.message || err);
-    toast('Veriler yüklenemedi: ' + (err.message || err), 'error');
+    toast('Veriler yüklenemedi: ' + friendlyError(err), 'error');
     products   = [];
     categories = [];
   }
@@ -645,7 +646,7 @@ export async function submitProductForm(e) {
     }
     closeProductModal(); renderAll();
   } catch (err) {
-    errEl.textContent = 'Hata: ' + (err.message || err);
+    errEl.textContent = 'Hata: ' + friendlyError(err);
   } finally {
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Kaydet'; }
   }
@@ -724,7 +725,7 @@ export async function submitStockOut(e) {
     closeStockOutModal(); renderAll();
     toast(`${qty} adet stoktan düşüldü`);
   } catch (err) {
-    errEl.textContent = 'Hata: ' + (err.message || err);
+    errEl.textContent = 'Hata: ' + friendlyError(err);
   } finally {
     if (submitBtn) submitBtn.disabled = false;
   }
@@ -784,7 +785,7 @@ async function doDelete(id) {
     renderAll();
     toast('Ürün silindi');
   } catch (err) {
-    toast('Silme hatası: ' + (err.message || err), 'error');
+    toast('Silme hatası: ' + friendlyError(err), 'error');
   }
 }
 
@@ -882,7 +883,7 @@ export async function submitNewCategory(e) {
     renderCategoryList(); populateFilters();
     toast('Kategori eklendi');
   } catch (err) {
-    errEl.textContent = 'Hata: ' + (err.message || err);
+    errEl.textContent = 'Hata: ' + friendlyError(err);
   }
 }
 
@@ -916,7 +917,7 @@ async function commitCategoryRename(oldName, rawNew) {
     renderCategoryList(); populateFilters(); renderAll();
     toast('Kategori güncellendi');
   } catch (err) {
-    errEl.textContent = 'Hata: ' + (err.message || err);
+    errEl.textContent = 'Hata: ' + friendlyError(err);
   }
 }
 function askDeleteCategory(name) {
@@ -934,7 +935,7 @@ function askDeleteCategory(name) {
       renderCategoryList(); populateFilters(); renderAll();
       toast('Kategori silindi');
     } catch (err) {
-      toast('Hata: ' + (err.message || err), 'error');
+      toast('Hata: ' + friendlyError(err), 'error');
     }
   });
 }
@@ -949,7 +950,7 @@ async function cycleCategoryColor(name) {
     cat.color = newColor;
     renderCategoryList(); renderAll();
   } catch (err) {
-    toast('Hata: ' + (err.message || err), 'error');
+    toast('Hata: ' + friendlyError(err), 'error');
   }
 }
 
@@ -982,7 +983,7 @@ export async function exportCSV(status = '') {
       : (EXPORT_FILTER_SUFFIX[status] ?? 'tum-urunler');
     downloadProductsCSV(rows, suffix);
   } catch (err) {
-    toast('Dışa aktarma hatası: ' + (err.message || err), 'error');
+    toast('Dışa aktarma hatası: ' + friendlyError(err), 'error');
   }
 }
 
@@ -1280,7 +1281,7 @@ async function handleInvoiceUpload(e, mode) {
     renderAll();
   } catch (err) {
     console.error('Invoice upload error:', err);
-    toast('Fatura işlenemedi: ' + (err.message || err), 'error');
+    toast('Fatura işlenemedi: ' + friendlyError(err), 'error');
   } finally {
     if (textEl)  textEl.textContent         = mode === 'in' ? 'Alım Faturası' : 'Satış Faturası';
     if (labelEl) labelEl.style.pointerEvents = '';
@@ -1455,7 +1456,7 @@ async function processImportFile(file) {
     document.getElementById('import-step-1').style.display = 'none';
     document.getElementById('import-step-2').style.display = '';
   } catch (err) {
-    errEl.textContent = 'Dosya okunamadı: ' + (err.message || err);
+    errEl.textContent = 'Dosya okunamadı: ' + friendlyError(err);
   }
 }
 
@@ -1578,7 +1579,7 @@ async function executeImport() {
     const errRow = document.getElementById('import-result-error-row');
     if (errRow) errRow.style.color = skipCount > 0 ? 'var(--error)' : 'var(--text-secondary)';
   } catch (err) {
-    errEl.textContent = 'İçe aktarma hatası: ' + (err.message || err);
+    errEl.textContent = 'İçe aktarma hatası: ' + friendlyError(err);
   } finally {
     btn.disabled = false; btn.textContent = 'İçe Aktar';
   }
@@ -1618,7 +1619,7 @@ async function loadHistory() {
     historyRows = data || [];
     renderHistory();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error)">${escapeHtml(String(e.message || e))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error)">${escapeHtml(friendlyError(e))}</td></tr>`;
   }
 }
 

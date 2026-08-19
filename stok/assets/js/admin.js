@@ -1,6 +1,6 @@
 import { sb } from './supabase.js';
 import { currentUser, SUPER_ADMIN_EMAIL, PERM_DEFS, DEFAULT_PERMISSIONS, STATIC_NAMES } from './auth.js';
-import { toast, showConfirm, escapeHtml } from './ui.js';
+import { toast, showConfirm, escapeHtml, friendlyError } from './ui.js';
 
 async function adminInvoke(action, payload = {}) {
   const { data, error } = await sb.functions.invoke('admin-operations', {
@@ -16,6 +16,19 @@ let editingPermUserId = null;
 let editingPermData = {};
 let editingReceivesAlerts = false;
 let editingUserDetail = null;
+
+// Kullanıcı listesindeki aksiyon butonları inline onclick="fn('${email}')" yerine
+// data-* + event delegation kullanır — email'de tek tırnak olması JS string'ini
+// kırıp keyfi kod çalıştırabilirdi (escapeHtml HTML'i kaçırır, gömülü JS string'i
+// kaçırmaz).
+document.getElementById('admin-users-body')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const { act, userId, email } = btn.dataset;
+  if (act === 'detail')      openUserDetail(userId);
+  if (act === 'perm-edit')   openPermEditor(userId, email);
+  if (act === 'delete-user') askDeleteUser(userId, email);
+});
 
 export function openAdminPanel() {
   document.getElementById('main-dashboard').classList.add('hidden');
@@ -49,8 +62,7 @@ export async function loadAdminUsers() {
     const { data, error, status } = await sb.from('user_permissions').select('*').order('created_at', { ascending: true });
     if (error) {
       tbody.innerHTML = `<tr><td colspan="5"><div class="admin-empty" style="color:var(--error);">
-        Supabase hatası (${status}): ${escapeHtml(error.message)}<br>
-        <small style="opacity:.7">${escapeHtml(error.hint || error.details || '')}</small>
+        Kullanıcı listesi yüklenemedi (${status}): ${escapeHtml(friendlyError(error))}
       </div></td></tr>`;
       return;
     }
@@ -79,14 +91,14 @@ export async function loadAdminUsers() {
                       : '<span class="role-badge user">Kullanıcı</span>';
       const createdAt = u.created_at ? new Date(u.created_at).toLocaleDateString('tr-TR') : '—';
       const isSelf = u.user_id === currentUser?.id;
-      const detailBtn = `<button class="btn btn-secondary" style="font-size:11px;padding:5px 10px;" onclick="openUserDetail('${u.user_id}')">
+      const detailBtn = `<button class="btn btn-secondary" style="font-size:11px;padding:5px 10px;" data-act="detail" data-user-id="${escapeHtml(u.user_id)}">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>Detay
       </button>`;
       const actions = isSuperAdmin
         ? detailBtn
         : `${detailBtn}
-        <button class="btn btn-secondary" style="font-size:11px;padding:5px 10px;margin-left:4px;" onclick="openPermEditor('${u.user_id}','${escapeHtml(u.email)}')">Yetki Düzenle</button>
-        ${!isSelf ? `<button class="icon-btn danger" style="margin-left:4px;" title="Kullanıcıyı Sil" onclick="askDeleteUser('${u.user_id}','${escapeHtml(u.email)}')">
+        <button class="btn btn-secondary" style="font-size:11px;padding:5px 10px;margin-left:4px;" data-act="perm-edit" data-user-id="${escapeHtml(u.user_id)}" data-email="${escapeHtml(u.email)}">Yetki Düzenle</button>
+        ${!isSelf ? `<button class="icon-btn danger" style="margin-left:4px;" title="Kullanıcıyı Sil" data-act="delete-user" data-user-id="${escapeHtml(u.user_id)}" data-email="${escapeHtml(u.email)}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
         </button>` : ''}
       `;
@@ -103,7 +115,7 @@ export async function loadAdminUsers() {
       </tr>`;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="admin-empty" style="color:var(--error);">Beklenmedik hata: ${escapeHtml(String(err.message || err))}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5"><div class="admin-empty" style="color:var(--error);">Beklenmedik hata: ${escapeHtml(friendlyError(err))}</div></td></tr>`;
   }
 }
 
@@ -185,7 +197,7 @@ export async function saveUserDetail(e) {
     toast('Kullanıcı güncellendi');
     loadAdminUsers();
   } catch (err) {
-    errEl.textContent = 'Hata: ' + (err.message || String(err));
+    errEl.textContent = 'Hata: ' + friendlyError(err);
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Kaydet`;
@@ -226,7 +238,7 @@ export async function loadAuditLogs() {
       </tr>`;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="admin-empty">Hata: ${escapeHtml(err.message)}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="admin-empty">Hata: ${escapeHtml(friendlyError(err))}</div></td></tr>`;
   }
 }
 
@@ -287,7 +299,7 @@ export async function savePermissions() {
     loadAdminUsers();
     toast('Yetkiler güncellendi');
   } catch (err) {
-    toast('Hata: ' + (err.message || err), 'error');
+    toast('Hata: ' + friendlyError(err), 'error');
   }
 }
 
@@ -304,12 +316,12 @@ export function askDeleteUser(userId, email) {
       let dbOk = false, authOk = false, dbErrMsg = '', authErrMsg = '';
       try {
         const { error } = await sb.from('user_permissions').delete().eq('user_id', userId);
-        if (error) dbErrMsg = error.message; else dbOk = true;
-      } catch (e) { dbErrMsg = e.message || String(e); }
+        if (error) dbErrMsg = friendlyError(error); else dbOk = true;
+      } catch (e) { dbErrMsg = friendlyError(e); }
       try {
         await adminInvoke('delete_user', { userId });
         authOk = true;
-      } catch (e) { authErrMsg = e.message || String(e); }
+      } catch (e) { authErrMsg = friendlyError(e); }
       loadAdminUsers();
       if (dbOk && authOk)        toast(`${email} tamamen silindi`);
       else if (dbOk && !authOk)  toast(`DB silindi — Auth hatası: ${authErrMsg}`, 'error');
@@ -356,8 +368,8 @@ export async function handleCreateUser(e) {
     succEl.style.display = '';
     toast(`${fullName} eklendi`);
   } catch (err) {
-    const msg = err.message || String(err);
-    errEl.textContent = /already registered|already exists/i.test(msg) ? 'Bu e-posta zaten kayıtlı.' : 'Hata: ' + msg;
+    const rawMsg = (err && err.message) || String(err);
+    errEl.textContent = /already registered|already exists/i.test(rawMsg) ? 'Bu e-posta zaten kayıtlı.' : 'Hata: ' + friendlyError(err);
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg> Kullanıcı Oluştur`;
@@ -367,15 +379,12 @@ export async function handleCreateUser(e) {
 window.openAdminPanel    = openAdminPanel;
 window.closeAdminPanel   = closeAdminPanel;
 window.switchAdminTab    = switchAdminTab;
-window.openUserDetail    = openUserDetail;
 window.closeUserDetail   = closeUserDetail;
 window.toggleUdEmailAlerts = toggleUdEmailAlerts;
 window.saveUserDetail    = saveUserDetail;
 window.loadAuditLogs     = loadAuditLogs;
-window.openPermEditor    = openPermEditor;
 window.togglePerm        = togglePerm;
 window.toggleEmailAlerts = toggleEmailAlerts;
 window.savePermissions   = savePermissions;
 window.closePermModal    = closePermModal;
-window.askDeleteUser     = askDeleteUser;
 window.handleCreateUser  = handleCreateUser;

@@ -1,3 +1,15 @@
+// Ham Supabase/Postgres hatalarını (RLS ihlali, constraint adı, SQLSTATE kodu vb.)
+// kullanıcıya göstermeden önce genelleştirir; ham hata konsola yazılır.
+// Edge Function'ların kendi ürettiği insan-dostu mesajlar (örn. "Admin yetkisi
+// gerekli") code alanı taşımadığı ve DB jargonu içermediği için olduğu gibi geçer.
+export function friendlyError(err, fallback = 'İşlem başarısız, lütfen tekrar deneyin.') {
+  console.error(err);
+  const msg = (err && err.message) || String(err ?? '');
+  const looksRaw = Boolean(err && err.code) ||
+    /policy|constraint|relation|column|violates|duplicate key|permission denied|JWT|PGRST|SQLSTATE/i.test(msg);
+  return looksRaw || !msg ? fallback : msg;
+}
+
 export function fmtTL(n) {
   return '₺' + Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

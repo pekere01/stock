@@ -113,7 +113,8 @@ function translateAuthError(msg) {
   if (/Password should be at least/i.test(msg)) return 'Şifre en az 6 karakter olmalı.';
   if (/rate limit/i.test(msg))                 return 'Çok fazla deneme. Lütfen biraz bekle.';
   if (/network|fetch/i.test(msg))              return 'Bağlantı hatası. İnternetini kontrol et.';
-  return msg;
+  console.error('auth error:', msg);
+  return 'Giriş başarısız. Lütfen tekrar deneyin.';
 }
 
 export async function handleAuthSubmit(e) {

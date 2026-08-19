@@ -1,4 +1,5 @@
 import { sb } from './supabase.js';
+import { friendlyError } from './ui.js';
 
 async function fetchReviewItems(kategori) {
   const { data, error } = await sb.rpc('get_review_items', { p_kategori: kategori });
@@ -104,7 +105,7 @@ function renderInTestRows(items) {
 export async function clearInTestFlag(id) {
   const { error } = await sb.from('products').update({ in_test: false }).eq('id', id);
   if (error) {
-    alert('Hata: ' + error.message);
+    alert('Hata: ' + friendlyError(error));
     return;
   }
   await loadReviewPanel();
@@ -138,7 +139,7 @@ export async function reverseReviewItem(guid) {
   if (!confirm('Bu irsaliyenin stoğunu geri almak istediğinize emin misiniz?')) return;
   const { data, error } = await sb.rpc('manual_reverse_review', { p_guid: guid });
   if (error || data?.error) {
-    alert('Hata: ' + (error?.message || data.error));
+    alert('Hata: ' + (data?.error || friendlyError(error)));
     return;
   }
   await loadReviewPanel();
@@ -147,7 +148,7 @@ export async function reverseReviewItem(guid) {
 export async function dismissReviewItem(guid) {
   const { error } = await sb.rpc('dismiss_review', { p_guid: guid });
   if (error) {
-    alert('Hata: ' + error.message);
+    alert('Hata: ' + friendlyError(error));
     return;
   }
   await loadReviewPanel();
