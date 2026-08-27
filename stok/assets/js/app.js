@@ -49,7 +49,7 @@ const PAGE_SIZE      = 50;
 let totalCount       = 0;
 let pageSearch       = '';
 let pageCatFilter    = '';
-let pageStatusFilter = '';
+let pageStatusFilter = 'active';
 let _searchTimer     = null;
 
 /* ===== REALTIME ===== */
@@ -80,6 +80,7 @@ function dbToProduct(row) {
     cost:         parseFloat(row.cost_price)  || 0,
     price:        parseFloat(row.sale_price)  || 0,
     stock:        row.stock        || 0,
+    consignment:  row.consignment_stock || 0,
     minStock:     row.min_stock    || 0,
     sales7d:      row.sales7d      || 0,
     status:       row.status       || 'active',
@@ -171,12 +172,8 @@ function renderStats() {
     return ms.length ? ms.reduce((a, x) => a + x, 0) / ms.length : 0;
   })();
   const priced = products.filter(p => p.price > 0);
-  const avgUnitProfitTL = priced.length
-    ? priced.reduce((acc, p) => {
-        const buyTL  = (p.cost  || 0) * (p.purchaseRate || eurRate);
-        const sellTL = (p.price || 0) * (p.saleRate     || eurRate);
-        return acc + (sellTL - buyTL);
-      }, 0) / priced.length
+  const avgUnitProfitEUR = priced.length
+    ? priced.reduce((acc, p) => acc + ((p.price || 0) - (p.cost || 0)), 0) / priced.length
     : 0;
 
   const viewOnly = isViewOnly();
@@ -200,8 +197,8 @@ function renderStats() {
     document.getElementById('stat-margin-trend').textContent = 'Yetkisiz alan';
   } else {
     animateCounter(document.getElementById('stat-margin'), avgMargin, 1500, v => '%' + v.toFixed(1));
-    document.getElementById('stat-margin-trend').textContent = avgUnitProfitTL !== 0
-      ? `Ort. birim kâr: ${fmtTLShort(avgUnitProfitTL)}`
+    document.getElementById('stat-margin-trend').textContent = avgUnitProfitEUR !== 0
+      ? `Ort. birim kâr: ${fmtEURShort(avgUnitProfitEUR)}`
       : 'Tüm ürünler dahil';
   }
 }
@@ -678,11 +675,9 @@ export function updateStockOutProfit() {
   const display   = document.getElementById('stockout-profit-display');
   const valEl     = document.getElementById('stockout-profit-val');
   if (salePrice <= 0 || (p.cost || 0) <= 0) { display.style.display = 'none'; return; }
-  const buyTL     = (p.cost  || 0) * (p.purchaseRate || eurRate);
-  const sellTL    = salePrice * saleRate;
-  const unitProfit = sellTL - buyTL;
+  const unitProfit = salePrice - (p.cost || 0);
   display.style.display = 'flex';
-  valEl.textContent = `${fmtTL(unitProfit)} × ${qty} = ${fmtTL(unitProfit * qty)}`;
+  valEl.textContent = `${fmtEUR(unitProfit)} × ${qty} = ${fmtEUR(unitProfit * qty)}`;
   valEl.className   = 'profit-val ' + (unitProfit >= 0 ? 'profit-pos' : 'profit-neg');
 }
 export function closeStockOutModal() {
@@ -719,7 +714,7 @@ export async function submitStockOut(e) {
       triggerLowStockAlert(p);
     }
     const noteStr = salePrice > 0
-      ? `Satış fiyatı: ${fmtEUR(salePrice)} × ${saleRate.toFixed(2)} = ${fmtTL(salePrice * saleRate)}`
+      ? `Satış fiyatı: ${fmtEUR(salePrice)} (₺ eşd.: ${fmtTL(salePrice * saleRate)})`
       : '';
     logMovement({ productId: p.id, productName: p.name, type: 'sale', quantity: qty, oldStock: prevStock, newStock, newPrice: salePrice, notes: noteStr });
     closeStockOutModal(); renderAll();
@@ -1644,6 +1639,9 @@ function renderHistory() {
     edit:         { label: 'Düzenlendi',        color: 'var(--accent)' },
     price_change: { label: 'Fiyat Değişti',     color: 'var(--warning)' },
     import:       { label: '↑ İçe Aktarıldı',  color: '#8b5cf6' },
+    konsinye_out:    { label: '📦 Konsinyeye Çıktı',  color: '#0ea5e9' },
+    konsinye_return: { label: '↩️ Konsinyeden İade', color: 'var(--success)' },
+    konsinye_sale:   { label: '🧾 Konsinye Fatura',   color: '#f97316' },
   };
   tbody.innerHTML = rows.map(r => {
     const meta = TYPE_META[r.type] || { label: r.type, color: 'var(--text-secondary)' };

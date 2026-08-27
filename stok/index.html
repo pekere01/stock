@@ -80,6 +80,9 @@
         <button class="btn btn-secondary" id="review-panel-btn" onclick="openReviewPanel()" title="İnceleme Bekleyenler">
           İnceleme Bekleyenler
         </button>
+        <button class="btn btn-secondary" id="konsinye-panel-btn" onclick="openKonsinyePanel()" title="Konsinye Deposu">
+          Konsinye Deposu
+        </button>
         <div class="user-widget" id="user-widget" style="display:none;">
           <div class="user-avatar" id="user-avatar">?</div>
           <div class="user-email" id="user-email"></div>
@@ -166,7 +169,7 @@
       </select>
       <select id="filter-status">
         <option value="">Tüm Durumlar</option>
-        <option value="active">Aktif</option>
+        <option value="active" selected>Stokta Olanlar</option>
         <option value="low_stock">Düşük Stok</option>
         <option value="out_of_stock">Tükendi</option>
       </select>
@@ -459,6 +462,24 @@
   </div>
 </div>
 
+<!-- ===== KONSİNYE DEPOSU PANELİ ===== -->
+<div class="admin-panel hidden" id="konsinye-panel">
+  <div class="admin-panel-header">
+    <button class="btn btn-secondary" onclick="closeKonsinyePanel()">← Dashboard'a Dön</button>
+    <div class="admin-panel-title">Konsinye Deposu</div>
+  </div>
+
+  <h3>Konsinyede Bekleyen Ürünler</h3>
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Ürün Adı</th><th>Barkod</th><th>Ana Stok</th><th>Konsinye</th><th>İşlem</th></tr></thead>
+        <tbody id="konsinye-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODALS ===== -->
 
 <!-- Add/Edit Modal -->
@@ -552,8 +573,8 @@
           <input type="number" id="stockout-rate" min="0.01" step="0.01" oninput="updateStockOutProfit()">
         </div>
         <div class="profit-display" id="stockout-profit-display" style="display:none;">
-          <span class="profit-label">Birim TL Kârı</span>
-          <span class="profit-val" id="stockout-profit-val">₺0</span>
+          <span class="profit-label">Birim Kâr</span>
+          <span class="profit-val" id="stockout-profit-val">€0</span>
         </div>
       </div>
       <div class="form-error" id="stockout-error"></div>
