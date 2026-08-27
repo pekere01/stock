@@ -1090,6 +1090,9 @@ export async function fetchAndUpdateEurRate() {
 
 /* ===== INIT ===== */
 function init() {
+  const statusSel = document.getElementById('filter-status');
+  if (statusSel) statusSel.value = pageStatusFilter;
+
   const valEl = document.getElementById('eur-rate-val');
   if (valEl) {
     valEl.textContent = eurRate.toFixed(2);
