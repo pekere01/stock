@@ -424,58 +424,66 @@
   </div>
 </div>
 
-<!-- ===== İNCELEME BEKLEYENLER PANELİ ===== -->
-<div class="admin-panel hidden" id="review-panel">
-  <div class="admin-panel-header">
-    <button class="btn btn-secondary" onclick="closeReviewPanel()">← Dashboard'a Dön</button>
-    <div class="admin-panel-title">İnceleme Bekleyenler</div>
-  </div>
-
-  <h3>Manuel İşaretlenenler — Test / Konsinye</h3>
-  <div class="table-wrap">
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>Ürün Adı</th><th>Barkod</th><th>Stok</th><th>İşlem</th></tr></thead>
-        <tbody id="review-table-intest-body"></tbody>
-      </table>
+<!-- ===== İNCELEME BEKLEYENLER MODALI ===== -->
+<div class="modal-overlay" id="review-panel" onclick="closeReviewOnOverlay(event)">
+  <div class="modal history-modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">İnceleme Bekleyenler</h3>
+      <button class="modal-close" onclick="closeReviewPanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
     </div>
-  </div>
 
-  <h3>SCT — Mikro'da 15+ Gündür Faturasız</h3>
-  <div class="table-wrap">
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>Stok Kod</th><th>İrsaliye No</th><th>Miktar</th><th>Kaç Gündür Faturasız</th><th>İşlem</th></tr></thead>
-        <tbody id="review-table-sct-body"></tbody>
-      </table>
+    <h3>Manuel İşaretlenenler — Test / Konsinye</h3>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Ürün Adı</th><th>Barkod</th><th>Stok</th><th>İşlem</th></tr></thead>
+          <tbody id="review-table-intest-body"></tbody>
+        </table>
+      </div>
     </div>
-  </div>
 
-  <h3>Diğer / Beklenmedik</h3>
-  <div class="table-wrap">
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>Stok Kod</th><th>İrsaliye No</th><th>Miktar</th><th>Kaç Gündür Faturasız</th><th>İşlem</th></tr></thead>
-        <tbody id="review-table-diger-body"></tbody>
-      </table>
+    <h3>SCT — Mikro'da 15+ Gündür Faturasız</h3>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Stok Kod</th><th>İrsaliye No</th><th>Miktar</th><th>Kaç Gündür Faturasız</th><th>İşlem</th></tr></thead>
+          <tbody id="review-table-sct-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3>Diğer / Beklenmedik</h3>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Stok Kod</th><th>İrsaliye No</th><th>Miktar</th><th>Kaç Gündür Faturasız</th><th>İşlem</th></tr></thead>
+          <tbody id="review-table-diger-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ===== KONSİNYE DEPOSU PANELİ ===== -->
-<div class="admin-panel hidden" id="konsinye-panel">
-  <div class="admin-panel-header">
-    <button class="btn btn-secondary" onclick="closeKonsinyePanel()">← Dashboard'a Dön</button>
-    <div class="admin-panel-title">Konsinye Deposu</div>
-  </div>
+<!-- ===== KONSİNYE DEPOSU MODALI ===== -->
+<div class="modal-overlay" id="konsinye-panel" onclick="closeKonsinyeOnOverlay(event)">
+  <div class="modal history-modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Konsinye Deposu</h3>
+      <button class="modal-close" onclick="closeKonsinyePanel()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
 
-  <h3>Konsinyede Bekleyen Ürünler</h3>
-  <div class="table-wrap">
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>Ürün Adı</th><th>Barkod</th><th>Ana Stok</th><th>Konsinye</th><th>İşlem</th></tr></thead>
-        <tbody id="konsinye-table-body"></tbody>
-      </table>
+    <h3>Konsinyede Bekleyen Ürünler</h3>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Ürün Adı</th><th>Barkod</th><th>Ana Stok</th><th>Konsinye</th><th>İşlem</th></tr></thead>
+          <tbody id="konsinye-table-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>

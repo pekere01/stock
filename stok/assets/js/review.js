@@ -200,16 +200,16 @@ export async function loadKonsinyePanel() {
 }
 
 export function openKonsinyePanel() {
-  const panel = document.getElementById('konsinye-panel');
-  panel.classList.remove('hidden');
+  document.getElementById('konsinye-panel').classList.add('visible');
   loadKonsinyePanel();
-  requestAnimationFrame(() => {
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
 }
 
 export function closeKonsinyePanel() {
-  document.getElementById('konsinye-panel').classList.add('hidden');
+  document.getElementById('konsinye-panel').classList.remove('visible');
+}
+
+export function closeKonsinyeOnOverlay(e) {
+  if (e.target.id === 'konsinye-panel') closeKonsinyePanel();
 }
 
 function promptKonsinyeQty(max) {
@@ -250,16 +250,16 @@ export async function konsinyeInvoice(productId, maxQty) {
 }
 
 export function openReviewPanel() {
-  const panel = document.getElementById('review-panel');
-  panel.classList.remove('hidden');
+  document.getElementById('review-panel').classList.add('visible');
   loadReviewPanel();
-  requestAnimationFrame(() => {
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
 }
 
 export function closeReviewPanel() {
-  document.getElementById('review-panel').classList.add('hidden');
+  document.getElementById('review-panel').classList.remove('visible');
+}
+
+export function closeReviewOnOverlay(e) {
+  if (e.target.id === 'review-panel') closeReviewPanel();
 }
 
 export async function reverseReviewItem(guid) {
@@ -283,11 +283,13 @@ export async function dismissReviewItem(guid) {
 
 window.openReviewPanel = openReviewPanel;
 window.closeReviewPanel = closeReviewPanel;
+window.closeReviewOnOverlay = closeReviewOnOverlay;
 window.reverseReviewItem = reverseReviewItem;
 window.dismissReviewItem = dismissReviewItem;
 window.clearInTestFlag = clearInTestFlag;
 window.konsinyeFromReview = konsinyeFromReview;
 window.openKonsinyePanel = openKonsinyePanel;
 window.closeKonsinyePanel = closeKonsinyePanel;
+window.closeKonsinyeOnOverlay = closeKonsinyeOnOverlay;
 window.konsinyeReturn = konsinyeReturn;
 window.konsinyeInvoice = konsinyeInvoice;
