@@ -1066,7 +1066,7 @@ export async function fetchAndUpdateEurRate() {
     let result = null;
     try {
       result = await trySource(
-        'https://api.frankfurter.app/latest?from=EUR&to=TRY',
+        'https://api.frankfurter.dev/v1/latest?from=EUR&to=TRY',
         j => ({ rate: j.rates?.TRY, date: j.date })
       );
     } catch (_) {
