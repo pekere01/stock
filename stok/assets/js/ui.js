@@ -37,11 +37,15 @@ export function statusLabel(s) {
 let scrollLockCount = 0;
 export function lockBodyScroll() {
   scrollLockCount++;
+  document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
 }
 export function unlockBodyScroll() {
   scrollLockCount = Math.max(0, scrollLockCount - 1);
-  if (scrollLockCount === 0) document.body.style.overflow = '';
+  if (scrollLockCount === 0) {
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+  }
 }
 
 export function escapeHtml(s) {
