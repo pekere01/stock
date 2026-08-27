@@ -32,6 +32,18 @@ export function statusLabel(s) {
   return { active: 'Aktif', low_stock: 'Düşük', out_of_stock: 'Tükendi' }[s] || s;
 }
 
+// Modal açıkken arka plan (body) fare tekerleğiyle kaymasın diye kilitlenir.
+// Sayaçlı: iç içe modal (örn. confirm-modal, başka bir modal üzerinde) doğru kapanır.
+let scrollLockCount = 0;
+export function lockBodyScroll() {
+  scrollLockCount++;
+  document.body.style.overflow = 'hidden';
+}
+export function unlockBodyScroll() {
+  scrollLockCount = Math.max(0, scrollLockCount - 1);
+  if (scrollLockCount === 0) document.body.style.overflow = '';
+}
+
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -78,10 +90,12 @@ export function showConfirm(title, text, onConfirm) {
   document.getElementById('confirm-text').textContent  = text;
   pendingConfirm = onConfirm;
   document.getElementById('confirm-modal').classList.add('visible');
+  lockBodyScroll();
 }
 export function closeConfirmModal() {
   document.getElementById('confirm-modal').classList.remove('visible');
   pendingConfirm = null;
+  unlockBodyScroll();
 }
 export function closeConfirmOnOverlay(e) {
   if (e.target.id === 'confirm-modal') closeConfirmModal();

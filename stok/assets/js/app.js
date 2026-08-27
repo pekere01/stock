@@ -4,7 +4,7 @@ import {
   fmtTL, fmtTLShort, fmtEUR, fmtEURShort,
   escapeHtml, animateCounter, calcStatus, statusLabel,
   showTooltip, hideTooltip, toast, showConfirm, closeConfirmModal,
-  friendlyError
+  friendlyError, lockBodyScroll, unlockBodyScroll
 } from './ui.js';
 import { closePermModal } from './admin.js';
 
@@ -548,6 +548,7 @@ export function openAddModal() {
   document.getElementById('form-error').textContent = '';
   document.getElementById('price-field-wrapper').style.display = 'none';
   document.getElementById('product-modal').classList.add('visible');
+  lockBodyScroll();
   setTimeout(() => document.getElementById('f-name').focus(), 100);
 }
 export function openEditModal(id) {
@@ -569,8 +570,9 @@ export function openEditModal(id) {
   const stockField = document.getElementById('f-stock').closest('.form-field');
   if (stockField) stockField.style.display = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
   document.getElementById('product-modal').classList.add('visible');
+  lockBodyScroll();
 }
-export function closeProductModal() { document.getElementById('product-modal').classList.remove('visible'); }
+export function closeProductModal() { document.getElementById('product-modal').classList.remove('visible'); unlockBodyScroll(); }
 export function closeProductModalOnOverlay(e) { if (e.target.id === 'product-modal') closeProductModal(); }
 
 export async function submitProductForm(e) {
@@ -663,6 +665,7 @@ export function openStockOutModal(id) {
   document.getElementById('stockout-rate').value  = eurRate.toFixed(2);
   document.getElementById('stockout-error').textContent = '';
   document.getElementById('stockout-modal').classList.add('visible');
+  lockBodyScroll();
   updateStockOutProfit();
   setTimeout(() => document.getElementById('stockout-qty').focus(), 100);
 }
@@ -682,6 +685,7 @@ export function updateStockOutProfit() {
 }
 export function closeStockOutModal() {
   document.getElementById('stockout-modal').classList.remove('visible');
+  unlockBodyScroll();
   stockOutId = null;
 }
 export function closeStockOutOnOverlay(e) { if (e.target.id === 'stockout-modal') closeStockOutModal(); }
@@ -791,10 +795,12 @@ export function openCategoryModal() {
   document.getElementById('new-category-name').value = '';
   renderCategoryList();
   document.getElementById('category-modal').classList.add('visible');
+  lockBodyScroll();
   setTimeout(() => document.getElementById('new-category-name').focus(), 100);
 }
 export function closeCategoryModal() {
   document.getElementById('category-modal').classList.remove('visible');
+  unlockBodyScroll();
   editingCategoryName = null;
 }
 export function closeCategoryOnOverlay(e) { if (e.target.id === 'category-modal') closeCategoryModal(); }
@@ -959,9 +965,11 @@ const EXPORT_FILTER_SUFFIX = {
 
 export function openExportModal() {
   document.getElementById('export-modal').classList.add('visible');
+  lockBodyScroll();
 }
 export function closeExportModal() {
   document.getElementById('export-modal').classList.remove('visible');
+  unlockBodyScroll();
 }
 export function closeExportOnOverlay(e) { if (e.target.id === 'export-modal') closeExportModal(); }
 
@@ -1345,9 +1353,11 @@ function openImportModal() {
   document.getElementById('import-file-input').value = '';
   document.getElementById('import-error').textContent = '';
   document.getElementById('import-modal').classList.add('visible');
+  lockBodyScroll();
 }
 function closeImportModal() {
   document.getElementById('import-modal').classList.remove('visible');
+  unlockBodyScroll();
   importRows = [];
 }
 function closeImportOnOverlay(e) { if (e.target.id === 'import-modal') closeImportModal(); }
@@ -1597,10 +1607,12 @@ async function openHistoryModal(productId = null) {
   document.getElementById('history-filter-type').value = '';
   document.getElementById('history-filter-search').value = '';
   document.getElementById('history-modal').classList.add('visible');
+  lockBodyScroll();
   await loadHistory();
 }
 function closeHistoryModal() {
   document.getElementById('history-modal').classList.remove('visible');
+  unlockBodyScroll();
   historyProductId = null;
   historyRows = [];
 }

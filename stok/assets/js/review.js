@@ -1,5 +1,5 @@
 import { sb } from './supabase.js';
-import { friendlyError } from './ui.js';
+import { friendlyError, lockBodyScroll, unlockBodyScroll } from './ui.js';
 
 async function fetchReviewItems(kategori) {
   const { data, error } = await sb.rpc('get_review_items', { p_kategori: kategori });
@@ -201,11 +201,13 @@ export async function loadKonsinyePanel() {
 
 export function openKonsinyePanel() {
   document.getElementById('konsinye-panel').classList.add('visible');
+  lockBodyScroll();
   loadKonsinyePanel();
 }
 
 export function closeKonsinyePanel() {
   document.getElementById('konsinye-panel').classList.remove('visible');
+  unlockBodyScroll();
 }
 
 export function closeKonsinyeOnOverlay(e) {
@@ -251,11 +253,13 @@ export async function konsinyeInvoice(productId, maxQty) {
 
 export function openReviewPanel() {
   document.getElementById('review-panel').classList.add('visible');
+  lockBodyScroll();
   loadReviewPanel();
 }
 
 export function closeReviewPanel() {
   document.getElementById('review-panel').classList.remove('visible');
+  unlockBodyScroll();
 }
 
 export function closeReviewOnOverlay(e) {

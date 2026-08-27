@@ -1,6 +1,6 @@
 import { sb } from './supabase.js';
 import { currentUser, SUPER_ADMIN_EMAIL, PERM_DEFS, DEFAULT_PERMISSIONS, STATIC_NAMES } from './auth.js';
-import { toast, showConfirm, escapeHtml, friendlyError } from './ui.js';
+import { toast, showConfirm, escapeHtml, friendlyError, lockBodyScroll, unlockBodyScroll } from './ui.js';
 
 async function adminInvoke(action, payload = {}) {
   const { data, error } = await sb.functions.invoke('admin-operations', {
@@ -273,6 +273,7 @@ export function openPermEditor(userId, email) {
           onclick="toggleEmailAlerts()"></button>
       </div>`;
     document.getElementById('perm-modal').classList.add('visible');
+    lockBodyScroll();
   });
 }
 
@@ -305,6 +306,7 @@ export async function savePermissions() {
 
 export function closePermModal() {
   document.getElementById('perm-modal').classList.remove('visible');
+  unlockBodyScroll();
   editingPermUserId = null;
 }
 
