@@ -24,6 +24,10 @@ function escapeHtml(s: unknown): string {
   );
 }
 
+// Legacy anon/service_role JWT yerine yeni sb_publishable_/sb_secret_ key sistemi
+const PUBLISHABLE_KEY = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}")["default"] ?? "";
+const SECRET_KEY = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}")["default"] ?? "";
+
 Deno.serve(async (req) => {
   const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") {
@@ -44,7 +48,7 @@ Deno.serve(async (req) => {
   const userRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      apikey: PUBLISHABLE_KEY,
     },
   });
   if (!userRes.ok) {
@@ -61,7 +65,7 @@ Deno.serve(async (req) => {
     // Service role client — reads user_permissions without RLS restriction
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      SECRET_KEY
     );
 
     // Fetch recipients

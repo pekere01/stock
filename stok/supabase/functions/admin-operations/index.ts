@@ -19,6 +19,10 @@ function corsHeadersFor(req: Request) {
 
 const SUPER_ADMIN_EMAIL = "teknik@soncag.com";
 
+// Legacy anon/service_role JWT yerine yeni sb_publishable_/sb_secret_ key sistemi
+const PUBLISHABLE_KEY = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}")["default"] ?? "";
+const SECRET_KEY = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}")["default"] ?? "";
+
 Deno.serve(async (req) => {
   const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") {
@@ -37,7 +41,7 @@ Deno.serve(async (req) => {
     // Caller kimliğini JWT ile doğrula (anon key + caller token)
     const sbCaller = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      PUBLISHABLE_KEY,
       { global: { headers: { Authorization: authHeader } } }
     );
     const { data: { user }, error: userErr } = await sbCaller.auth.getUser();
@@ -51,7 +55,7 @@ Deno.serve(async (req) => {
     // Service role client — yalnızca bu fonksiyon içinde, secret olarak tutulur
     const sbAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      SECRET_KEY,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 

@@ -1,6 +1,7 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? '';
 const SUPABASE_URL   = (process.env.SUPABASE_URL ?? '').replace(/\/$/, '');
-const SERVICE_ROLE   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+// Legacy service_role JWT yerine yeni sb_secret_ key (Vercel env var: SUPABASE_SECRET_KEY)
+const SERVICE_ROLE   = process.env.SUPABASE_SECRET_KEY ?? '';
 
 // PDF için 5MB üst sınır. base64 kodlaması ham veriden ~%33 büyük olduğu için
 // sınır, base64 karakter sayısına göre hesaplanıyor.

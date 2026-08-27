@@ -17,7 +17,8 @@ function corsHeadersFor(req: Request) {
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL") ?? "";
-const SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+// Legacy service_role JWT yerine yeni sb_secret_ key sistemi
+const SERVICE_ROLE   = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}")["default"] ?? "";
 
 // PDF için 5MB üst sınır. base64 kodlaması ham veriden ~%33 büyük olduğu için
 // sınır, base64 karakter sayısına göre hesaplanıyor.
