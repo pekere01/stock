@@ -1,7 +1,7 @@
 import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { currentUser, currentPermissions, isAdmin, canDo, isViewOnly, logAction, bootstrapAuth } from './auth.js';
 import {
-  fmtTL, fmtTLShort, fmtEUR, fmtEURShort,
+  fmtTLShort, fmtEUR, fmtEURShort,
   escapeHtml, animateCounter, calcStatus, statusLabel,
   showTooltip, hideTooltip, toast, showConfirm, closeConfirmModal,
   friendlyError, lockBodyScroll, unlockBodyScroll
@@ -662,7 +662,6 @@ export function openStockOutModal(id) {
   document.getElementById('stockout-qty').value   = 1;
   document.getElementById('stockout-qty').max     = p.stock;
   document.getElementById('stockout-price').value = p.price > 0 ? p.price : '';
-  document.getElementById('stockout-rate').value  = eurRate.toFixed(2);
   document.getElementById('stockout-error').textContent = '';
   document.getElementById('stockout-modal').classList.add('visible');
   lockBodyScroll();
@@ -673,7 +672,6 @@ export function updateStockOutProfit() {
   const p = products.find(x => x.id === stockOutId);
   if (!p) return;
   const salePrice = parseFloat(document.getElementById('stockout-price').value) || 0;
-  const saleRate  = parseFloat(document.getElementById('stockout-rate').value)  || eurRate;
   const qty       = parseInt(document.getElementById('stockout-qty').value) || 1;
   const display   = document.getElementById('stockout-profit-display');
   const valEl     = document.getElementById('stockout-profit-val');
@@ -700,7 +698,7 @@ export async function submitStockOut(e) {
   if (isNaN(qty) || qty < 1) { errEl.textContent = 'Geçerli bir adet girin.'; return; }
   if (qty > p.stock) { errEl.textContent = `En fazla ${p.stock} adet çıkarabilirsiniz.`; return; }
   const salePrice = parseFloat(document.getElementById('stockout-price').value) || 0;
-  const saleRate  = parseFloat(document.getElementById('stockout-rate').value)  || eurRate;
+  const saleRate  = eurRate;
   const submitBtn = e.target.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.disabled = true;
   try {
@@ -718,7 +716,7 @@ export async function submitStockOut(e) {
       triggerLowStockAlert(p);
     }
     const noteStr = salePrice > 0
-      ? `Satış fiyatı: ${fmtEUR(salePrice)} (₺ eşd.: ${fmtTL(salePrice * saleRate)})`
+      ? `Satış fiyatı: ${fmtEUR(salePrice)}`
       : '';
     logMovement({ productId: p.id, productName: p.name, type: 'sale', quantity: qty, oldStock: prevStock, newStock, newPrice: salePrice, notes: noteStr });
     closeStockOutModal(); renderAll();
