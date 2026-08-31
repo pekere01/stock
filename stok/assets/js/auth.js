@@ -37,7 +37,7 @@ export function isViewOnly() {
   if (currentUser.email === SUPER_ADMIN_EMAIL) return false;
   if (!currentPermissions) return true;
   const p = currentPermissions;
-  return p.view === true && !p.add_products && !p.make_sales && !p.manage_categories && !p.admin;
+  return !p.add_products && !p.make_sales && !p.manage_categories && !p.admin;
 }
 
 export async function loadUserPermissions() {

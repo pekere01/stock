@@ -16,6 +16,24 @@ let editingPermUserId = null;
 let editingPermData = {};
 let editingReceivesAlerts = false;
 let editingUserDetail = null;
+let logsPage = 0;
+let logsTotalCount = 0;
+const LOGS_PAGE_SIZE = 50;
+
+const LOG_TYPE_META = {
+  create:       { label: 'Oluşturuldu',        color: 'var(--success)' },
+  delete:       { label: 'Silindi',             color: 'var(--error)' },
+  in:           { label: '↑ Stok Girişi',       color: 'var(--success)' },
+  out:          { label: '↓ Stok Çıkışı',       color: 'var(--error)' },
+  sale:         { label: '🛒 Satış',            color: '#f97316' },
+  bileme_kaplama:  { label: '🔧 Bileme/Kaplama', color: '#a855f7' },
+  edit:         { label: 'Düzenlendi',          color: 'var(--accent)' },
+  price_change: { label: 'Fiyat Değişti',       color: 'var(--warning)' },
+  import:       { label: '↑ İçe Aktarıldı',     color: '#8b5cf6' },
+  konsinye_out:    { label: '📦 Konsinyeye Çıktı',  color: '#0ea5e9' },
+  konsinye_return: { label: '↩️ Konsinyeden İade', color: 'var(--success)' },
+  konsinye_sale:   { label: '🧾 Konsinye Fatura',   color: '#f97316' },
+};
 
 // Kullanıcı listesindeki aksiyon butonları inline onclick="fn('${email}')" yerine
 // data-* + event delegation kullanır — email'de tek tırnak olması JS string'ini
@@ -51,7 +69,7 @@ export function switchAdminTab(tab) {
   document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
   const sec = document.getElementById('admin-section-' + tab);
   if (sec) sec.classList.add('active');
-  if (tab === 'logs') loadAuditLogs();
+  if (tab === 'logs') { logsPage = 0; loadAuditLogs(); }
   if (tab === 'create-user') onCreateUserTabOpen();
 }
 
@@ -204,36 +222,68 @@ export async function saveUserDetail(e) {
   }
 }
 
+export function refreshAuditLogs() {
+  logsPage = 0;
+  loadAuditLogs();
+}
+
+export function logsGoPage(page) {
+  if (page < 0) return;
+  logsPage = page;
+  loadAuditLogs();
+}
+
 export async function loadAuditLogs() {
   const tbody = document.getElementById('admin-logs-body');
   const countEl = document.getElementById('log-count-label');
+  const pagEl = document.getElementById('admin-logs-pagination');
   tbody.innerHTML = '<tr><td colspan="6"><div class="admin-empty">Yükleniyor…</div></td></tr>';
   try {
-    const { data, error } = await sb.from('audit_logs')
-      .select('*').order('created_at', { ascending: false }).limit(200);
+    // audit_logs artık hiçbir yerden yazılmıyor (logAction() kullanımdan kalktı) —
+    // gerçek hareket geçmişi (manuel + n8n/Mikro otomasyonu) stock_movements'ta.
+    const from = logsPage * LOGS_PAGE_SIZE;
+    const to   = from + LOGS_PAGE_SIZE - 1;
+    const { data, error, count } = await sb.from('stock_movements')
+      .select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
     if (error) throw error;
+    logsTotalCount = count || 0;
     if (!data || data.length === 0) {
       if (countEl) countEl.textContent = '';
+      if (pagEl) pagEl.innerHTML = '';
       tbody.innerHTML = '<tr><td colspan="6"><div class="admin-empty">Henüz işlem kaydı yok.</div></td></tr>';
       return;
     }
-    if (countEl) countEl.textContent = `Son ${data.length} kayıt gösteriliyor`;
+    const totalPages = Math.max(1, Math.ceil(logsTotalCount / LOGS_PAGE_SIZE));
+    if (countEl) countEl.textContent = `${logsTotalCount} kayıttan ${from + 1}-${from + data.length} arası gösteriliyor`;
+    if (pagEl) {
+      pagEl.innerHTML = `
+        <button class="btn btn-secondary" ${logsPage <= 0 ? 'disabled' : ''} onclick="logsGoPage(${logsPage - 1})">← Önceki</button>
+        <span style="font-size:12px;color:var(--text-secondary);padding:0 8px;">${logsPage + 1} / ${totalPages}</span>
+        <button class="btn btn-secondary" ${logsPage >= totalPages - 1 ? 'disabled' : ''} onclick="logsGoPage(${logsPage + 1})">Sonraki →</button>`;
+    }
     tbody.innerHTML = data.map(log => {
+      const meta = LOG_TYPE_META[log.type] || { label: log.type || '—', color: 'var(--text-secondary)' };
       const dt = new Date(log.created_at);
       const dateStr = dt.toLocaleDateString('tr-TR');
       const timeStr = dt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      let stockStr = '—';
+      if (log.old_stock !== null && log.new_stock !== null) {
+        const delta = log.new_stock - log.old_stock;
+        stockStr = `${delta >= 0 ? '+' : ''}${delta} (${log.old_stock}→${log.new_stock})`;
+      } else if (log.quantity) {
+        stockStr = `${log.quantity}`;
+      }
       return `<tr>
         <td>
           <div class="log-date" style="font-size:12px;color:var(--text-primary);">${dateStr}</div>
           <div class="log-sub">${timeStr}</div>
         </td>
         <td><div class="log-user">${escapeHtml(STATIC_NAMES[log.user_email] || log.user_email || '—')}</div></td>
-        <td><span class="log-action-badge">${escapeHtml(log.action || '—')}</span></td>
+        <td><span class="log-action-badge" style="color:${meta.color}">${escapeHtml(meta.label)}</span></td>
         <td>
           <div class="log-product">${escapeHtml(log.product_name || '—')}</div>
-          ${log.product_barcode ? `<div class="log-sub">${escapeHtml(log.product_barcode)}</div>` : ''}
         </td>
-        <td style="text-align:center;font-weight:700;">${log.quantity || '—'}</td>
+        <td style="text-align:center;font-weight:700;">${escapeHtml(stockStr)}</td>
         <td class="log-sub">${escapeHtml(log.notes || '—')}</td>
       </tr>`;
     }).join('');
@@ -385,6 +435,8 @@ window.closeUserDetail   = closeUserDetail;
 window.toggleUdEmailAlerts = toggleUdEmailAlerts;
 window.saveUserDetail    = saveUserDetail;
 window.loadAuditLogs     = loadAuditLogs;
+window.refreshAuditLogs  = refreshAuditLogs;
+window.logsGoPage        = logsGoPage;
 window.togglePerm        = togglePerm;
 window.toggleEmailAlerts = toggleEmailAlerts;
 window.savePermissions   = savePermissions;

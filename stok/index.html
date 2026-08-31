@@ -399,7 +399,7 @@
   <div id="admin-section-logs" class="admin-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
       <span style="font-size:13px;color:var(--text-secondary)" id="log-count-label"></span>
-      <button class="btn btn-secondary" onclick="loadAuditLogs()">
+      <button class="btn btn-secondary" onclick="refreshAuditLogs()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         Yenile
       </button>
@@ -421,6 +421,7 @@
         </tbody>
       </table>
     </div>
+    <div id="admin-logs-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;"></div>
   </div>
 </div>
 
