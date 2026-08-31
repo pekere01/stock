@@ -1,5 +1,10 @@
 import { sb } from './supabase.js';
+import { canDo } from './auth.js';
 import { friendlyError, lockBodyScroll, unlockBodyScroll } from './ui.js';
+
+function canMoveStock() {
+  return canDo('add_products') || canDo('make_sales');
+}
 
 async function fetchReviewItems(kategori) {
   const { data, error } = await sb.rpc('get_review_items', { p_kategori: kategori });
@@ -200,6 +205,7 @@ export async function loadKonsinyePanel() {
 }
 
 export function openKonsinyePanel() {
+  if (!canMoveStock()) { alert('Bu işlem için yetkiniz yok'); return; }
   document.getElementById('konsinye-panel').classList.add('visible');
   lockBodyScroll();
   loadKonsinyePanel();
@@ -252,6 +258,7 @@ export async function konsinyeInvoice(productId, maxQty) {
 }
 
 export function openReviewPanel() {
+  if (!canMoveStock()) { alert('Bu işlem için yetkiniz yok'); return; }
   document.getElementById('review-panel').classList.add('visible');
   lockBodyScroll();
   loadReviewPanel();

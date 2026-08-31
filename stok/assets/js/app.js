@@ -790,6 +790,7 @@ async function doDelete(id) {
 
 /* ===== KATEGORİ YÖNETİMİ ===== */
 export function openCategoryModal() {
+  if (!canDo('manage_categories')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
   editingCategoryName = null;
   document.getElementById('category-error').textContent = '';
   document.getElementById('new-category-name').value = '';

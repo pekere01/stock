@@ -82,10 +82,22 @@ export async function loadUserPermissions() {
 }
 
 function applyPermissions() {
-  const adminBtn = document.getElementById('admin-panel-btn');
-  const addBtn   = document.getElementById('add-product-btn');
-  if (adminBtn) adminBtn.style.display = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
-  if (addBtn)   addBtn.style.display   = canDo('add_products') ? '' : 'none';
+  const adminBtn        = document.getElementById('admin-panel-btn');
+  const addBtn          = document.getElementById('add-product-btn');
+  const categoryBtn     = document.getElementById('category-btn');
+  const importBtn       = document.getElementById('import-btn');
+  const invoiceDropdown = document.getElementById('dropdown-invoice');
+  const reviewBtn       = document.getElementById('review-panel-btn');
+  const konsinyeBtn     = document.getElementById('konsinye-panel-btn');
+  const canMoveStock    = canDo('add_products') || canDo('make_sales');
+
+  if (adminBtn)        adminBtn.style.display        = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
+  if (addBtn)          addBtn.style.display          = canDo('add_products') ? '' : 'none';
+  if (categoryBtn)     categoryBtn.style.display     = canDo('manage_categories') ? '' : 'none';
+  if (importBtn)       importBtn.style.display       = canDo('add_products') ? '' : 'none';
+  if (invoiceDropdown) invoiceDropdown.style.display = canDo('make_sales') ? '' : 'none';
+  if (reviewBtn)       reviewBtn.style.display        = canMoveStock ? '' : 'none';
+  if (konsinyeBtn)     konsinyeBtn.style.display      = canMoveStock ? '' : 'none';
 }
 
 export async function logAction(action, productName, productBarcode, quantity, notes) {
