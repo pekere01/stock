@@ -110,6 +110,19 @@ function productToDb(p) {
   };
 }
 
+// Postgres'in ILIKE'ı DB locale'ine göre büyük/küçük harf katlar — "C"/İngilizce
+// locale'de I sadece i ile eşleşir, Türkçe'deki ı ile değil. Arama teriminde
+// İ/I/ı/i ailesini açıkça [iİıI] karakter sınıfına çevirip locale'den bağımsız
+// hale getiriyoruz (bkz. imatch/regex kullanımı, loadData).
+function toTurkishSearchPattern(str) {
+  let out = '';
+  for (const ch of str) {
+    if ('iİıI'.includes(ch)) out += '[iİıI]';
+    else out += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return out;
+}
+
 export async function loadData(page = 0, recount = true) {
   if (!currentUser) return;
   setupRealtime();
@@ -123,7 +136,10 @@ export async function loadData(page = 0, recount = true) {
     let q = sb.from('products')
       .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' })
       .order('created_at', { ascending: false });
-    if (safe)              q = q.or(`name.ilike.%${safe}%,barcode.ilike.%${safe}%`);
+    if (safe) {
+      const pattern = toTurkishSearchPattern(safe);
+      q = q.or(`name.imatch.${pattern},barcode.imatch.${pattern}`);
+    }
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
     if (pageStatusFilter === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
     else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
