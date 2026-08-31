@@ -1489,6 +1489,9 @@
   /* SPA view isolation */
   #main-dashboard.hidden { display: none; }
 
+  #no-access-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  #no-access-screen.hidden { display: none; }
+
   /* ==== IMPORT MODAL ==== */
   .import-modal { max-width: 740px; width: 95%; }
   .import-drop-zone {
