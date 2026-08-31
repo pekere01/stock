@@ -51,6 +51,18 @@
 <!-- ===== APP ROOT (gizli, login sonrası görünür) ===== -->
 <div class="app-root hidden" id="app-root">
 
+<!-- ===== YETKİ YOK ===== -->
+<div class="app-container hidden" id="no-access-screen" style="display:flex;align-items:center;justify-content:center;min-height:100vh;">
+  <div style="text-align:center;max-width:360px;padding:32px;">
+    <div style="width:56px;height:56px;border-radius:50%;background:var(--error-glow);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+    </div>
+    <div style="font-size:18px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Yetkiniz Yok</div>
+    <div style="font-size:14px;color:var(--text-secondary);margin-bottom:24px;">Bu panele erişim yetkiniz bulunmuyor. Erişim için yöneticinizle iletişime geçin.</div>
+    <button class="btn btn-secondary" onclick="handleLogout()">Çıkış Yap</button>
+  </div>
+</div>
+
 <!-- ===== EDITOR ===== -->
 <div class="app-container" id="main-dashboard">
     <header>

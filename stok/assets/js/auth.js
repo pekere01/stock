@@ -151,11 +151,19 @@ export async function handleLogout() {
 async function enterApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-root').classList.remove('hidden');
-  document.getElementById('main-dashboard').classList.remove('hidden');
   document.getElementById('admin-panel').classList.add('hidden');
+  await loadUserPermissions();
+
+  if (!canDo('view')) {
+    document.getElementById('main-dashboard').classList.add('hidden');
+    document.getElementById('no-access-screen').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('no-access-screen').classList.add('hidden');
+  document.getElementById('main-dashboard').classList.remove('hidden');
+
   const widget = document.getElementById('user-widget');
   widget.style.display = '';
-  await loadUserPermissions();
   document.getElementById('user-email').textContent  = currentDisplayName;
   document.getElementById('user-avatar').textContent = (currentDisplayName[0] || '?').toUpperCase();
   await window.loadData?.();
