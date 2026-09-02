@@ -114,11 +114,23 @@ function productToDb(p) {
 // locale'de I sadece i ile eşleşir, Türkçe'deki ı ile değil. Arama teriminde
 // İ/I/ı/i ailesini açıkça [iİıI] karakter sınıfına çevirip locale'den bağımsız
 // hale getiriyoruz (bkz. imatch/regex kullanımı, loadData).
+// Mikro'dan gelen ürün adlarının ~%43'ünde çift/fazla boşluk var (sabit genişlikli
+// alan birleştirmesinden kalma) — arama teriminde tek boşluk yazan kullanıcı bu
+// ürünleri bulamıyordu. Her boşluk dizisini \s+ ile eşleştirip DB'deki fazla
+// boşluktan bağımsız hale getiriyoruz (2026-09-02, "T490 LNMT 1306PNTR IC808" bug'ı).
 function toTurkishSearchPattern(str) {
   let out = '';
-  for (const ch of str) {
+  let i = 0;
+  while (i < str.length) {
+    const ch = str[i];
+    if (/\s/.test(ch)) {
+      out += '\\s+';
+      while (i < str.length && /\s/.test(str[i])) i++;
+      continue;
+    }
     if ('iİıI'.includes(ch)) out += '[iİıI]';
     else out += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    i++;
   }
   return out;
 }
@@ -142,8 +154,13 @@ export async function loadData(page = 0, recount = true) {
       q = q.or(`name.imatch.${pattern},barcode.imatch.${pattern}`);
     }
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
-    if (pageStatusFilter === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
-    else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
+    // Metin araması varken Durum filtresi görmezden gelinir — kullanıcı bir ürün adı/barkod
+    // yazdığında "Stokta Olanlar" gibi varsayılan bir filtre yüzünden tükenmiş/pasif ürünler
+    // sessizce dışlanmasın (2026-09-02, "T490 LNMT 1306PNTR IC808" bulunamadı bug'ı).
+    if (!hasTextSearch) {
+      if (pageStatusFilter === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
+      else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
+    }
     q = q.range(from, to);
 
     const [catsRes, prodsRes, rpcRes] = await Promise.all([
