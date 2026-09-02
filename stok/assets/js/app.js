@@ -135,7 +135,8 @@ export async function loadData(page = 0, recount = true) {
     const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter);
     let q = sb.from('products')
       .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' })
-      .order('created_at', { ascending: false });
+      .order('category', { ascending: true })
+      .order('name', { ascending: true });
     if (safe) {
       const pattern = toTurkishSearchPattern(safe);
       q = q.or(`name.imatch.${pattern},barcode.imatch.${pattern}`);
@@ -212,7 +213,7 @@ function renderStats() {
     document.getElementById('stat-margin').textContent = '—';
     document.getElementById('stat-margin-trend').textContent = 'Yetkisiz alan';
   } else {
-    animateCounter(document.getElementById('stat-margin'), avgMargin, 1500, v => '%' + v.toFixed(1));
+    animateCounter(document.getElementById('stat-margin'), avgMargin, 1500, v => (v / 100).toFixed(2));
     document.getElementById('stat-margin-trend').textContent = avgUnitProfitEUR !== 0
       ? `Ort. birim kâr: ${fmtEURShort(avgUnitProfitEUR)}`
       : 'Tüm ürünler dahil';
@@ -452,7 +453,7 @@ function renderTable() {
         <td><span style="font-size:12px;font-weight:500;color:var(--text-secondary)">${escapeHtml(p.depo || '—')}</span></td>
         <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<strong>${fmtEUR(p.price)}</strong>`}</td>
         <td style="color:var(--text-secondary)">${viewOnly ? '—' : fmtEUR(p.cost)}</td>
-        <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<span class="${marginCls}">%${margin.toFixed(1)}</span>`}</td>
+        <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<span class="${marginCls}">${(margin / 100).toFixed(2)}</span>`}</td>
         <td>
           <div class="stock-cell">
             <div class="stock-row">
