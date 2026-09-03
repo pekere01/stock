@@ -38,3 +38,7 @@ n8n-workflow*.json
 nul
 Thumbs.db
 Desktop.ini
+
+# e2e dogrulama scriptinin bagimliliklari
+node_modules/
+e2e/node_modules/

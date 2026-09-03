@@ -1,0 +1,43 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Giriş — izleyici hesabı dashboard'u açar ve fiyat alanları maskelenir",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/, fill the project's configured username and password, click 'Giriş Yap'"
+    },
+    {
+      "type": "assertion",
+      "description": "A toast with the text 'Hoş geldin!' appears within 5 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "The login card is no longer visible and the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "assertion",
+      "description": "The four stat cards 'Toplam Ürün', 'Toplam Stok Değeri', 'Düşük Stok' and 'Ortalama GPA' are visible; 'Toplam Ürün' shows a number greater than 0 and 'Düşük Stok' shows a number"
+    },
+    {
+      "type": "assertion",
+      "description": "PERMISSION CHECK: the 'Toplam Stok Değeri' card shows the literal value '—' (em dash, not a number and not a € amount) and its subtext reads 'Yetkisiz alan'"
+    },
+    {
+      "type": "assertion",
+      "description": "PERMISSION CHECK: the 'Ortalama GPA' card shows the literal value '—' and its subtext reads 'Yetkisiz alan'"
+    },
+    {
+      "type": "assertion",
+      "description": "The products table has at least 1 data row and the pagination text matches the pattern '<N> üründen <a>–<b> gösteriliyor'"
+    },
+    {
+      "type": "assertion",
+      "description": "PERMISSION CHECK: in every visible product row the 'Fiyat', 'Maliyet' and 'Kar Marjı' cells all show '—'; no row shows a € amount or a numeric margin anywhere in those three columns"
+    },
+    {
+      "type": "assertion",
+      "description": "PERMISSION CHECK: the 'Stok' and '7g Satış' columns still show real numbers (stock data is allowed for this role)"
+    }
+  ]
+}

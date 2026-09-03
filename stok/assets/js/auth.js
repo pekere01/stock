@@ -89,6 +89,7 @@ function applyPermissions() {
   const invoiceDropdown = document.getElementById('dropdown-invoice');
   const reviewBtn       = document.getElementById('review-panel-btn');
   const konsinyeBtn     = document.getElementById('konsinye-panel-btn');
+  const exportBtn       = document.getElementById('export-btn');
   const canMoveStock    = canDo('add_products') || canDo('make_sales');
 
   if (adminBtn)        adminBtn.style.display        = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
@@ -98,6 +99,9 @@ function applyPermissions() {
   if (invoiceDropdown) invoiceDropdown.style.display = canDo('make_sales') ? '' : 'none';
   if (reviewBtn)       reviewBtn.style.display        = canMoveStock ? '' : 'none';
   if (konsinyeBtn)     konsinyeBtn.style.display      = canMoveStock ? '' : 'none';
+  // Export, tabloda maskelenen fiyat/maliyet/kar kolonlarini CSV'ye yaziyor —
+  // maskelemeyle ayni kosula bagli olmali, yoksa tek tikla bypass edilir.
+  if (exportBtn)       exportBtn.style.display       = isViewOnly() ? 'none' : '';
 }
 
 export async function logAction(action, productName, productBarcode, quantity, notes) {

@@ -1,0 +1,35 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Çıkış — oturum kapatınca giriş ekranına dönülür",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "action",
+      "description": "Click the logout icon button inside the user widget in the header"
+    },
+    {
+      "type": "assertion",
+      "description": "A toast with the text 'Çıkış yapıldı' appears"
+    },
+    {
+      "type": "assertion",
+      "description": "The login card with the subtitle 'Hesabınla giriş yap' is visible again and both email and password inputs are empty"
+    },
+    {
+      "type": "assertion",
+      "description": "The header text 'Sonçağ Stok · Dashboard' and the 'Toplam Ürün' stat card are no longer visible"
+    },
+    {
+      "type": "action",
+      "description": "Reload the page"
+    },
+    {
+      "type": "assertion",
+      "description": "The login screen is still shown (session was cleared); the dashboard does not auto-open"
+    }
+  ]
+}

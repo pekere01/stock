@@ -1,0 +1,27 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Ürünler — metin araması sonuçları filtreler",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "action",
+      "description": "Type 'IC908' into the search input with placeholder 'Ürün ara (ad veya barkod)...' and wait 2 seconds for the table to refresh"
+    },
+    {
+      "type": "assertion",
+      "description": "The products table shows at least 1 row and every visible row's product name or barcode cell contains 'IC908' (case-insensitive)"
+    },
+    {
+      "type": "action",
+      "description": "Clear the search input and type 'zzzz-olmayan-urun-9999', wait 2 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "The table shows the empty state text 'Ürün bulunamadı' and no product rows"
+    }
+  ]
+}

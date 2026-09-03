@@ -1,0 +1,39 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Yetki duvarı — izleyici hesabında yazma butonları gizli ve Geçmiş çalışmıyor",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "assertion",
+      "description": "IMPORTANT — judge visibility by the RENDERED page, not by the HTML source: an element that exists in the DOM but has CSS 'display: none' counts as NOT visible. Under that rule, the button 'Ürün Ekle' is not visible on the dashboard."
+    },
+    {
+      "type": "assertion",
+      "description": "Under the same rendered-visibility rule, the button 'Fatura Yükle' is not visible on the dashboard."
+    },
+    {
+      "type": "action",
+      "description": "Click the 'İşlemler' dropdown button to open its menu, then read only the menu items that are actually rendered on screen (ignore any item whose CSS display is none)"
+    },
+    {
+      "type": "assertion",
+      "description": "The rendered 'İşlemler' menu contains EXACTLY ONE item and its label is 'Geçmiş'. (Depends on the export-gate fix being deployed: 'Kategorileri Yönet', 'CSV İçe Aktar' and 'Excel'e Aktar' are all display:none for this role.)"
+    },
+    {
+      "type": "action",
+      "description": "Click the single rendered menu item labelled 'Geçmiş' and wait 3 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "The element with id 'history-modal' does NOT gain the CSS class 'visible' and no history dialog appears on screen — the click is intentionally inert for this role."
+    },
+    {
+      "type": "assertion",
+      "description": "In the products table, every 'İşlemler' cell (div with class 'row-actions') is empty: it renders zero buttons. No 'Stok Çıkar (Satış)', 'Düzenle', 'Sil' or 'Hareket Geçmişi' icon button exists in any row."
+    }
+  ]
+}

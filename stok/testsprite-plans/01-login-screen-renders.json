@@ -1,0 +1,27 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Giriş ekranı — form ve marka öğeleri görünür",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and wait for the page to fully load"
+    },
+    {
+      "type": "assertion",
+      "description": "The login card shows the brand title text 'Sonçağ Stok' and the subtitle 'Hesabınla giriş yap'"
+    },
+    {
+      "type": "assertion",
+      "description": "An email input (type=email, placeholder 'ornek@mail.com') and a password input (type=password, placeholder 'En az 6 karakter') are visible"
+    },
+    {
+      "type": "assertion",
+      "description": "A submit button with the exact text 'Giriş Yap' is visible and enabled"
+    },
+    {
+      "type": "assertion",
+      "description": "The dashboard header text 'Sonçağ Stok · Dashboard' and the stat card 'Toplam Ürün' are NOT visible (app root is hidden behind the login screen)"
+    }
+  ]
+}

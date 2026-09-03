@@ -1,0 +1,23 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "404 — olmayan yol özel Türkçe 404 sayfasını gösterir",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/boyle-bir-sayfa-yok"
+    },
+    {
+      "type": "assertion",
+      "description": "The page title contains 'Sayfa Bulunamadı' and an h1 heading with the text 'Sayfa bulunamadı' is visible"
+    },
+    {
+      "type": "assertion",
+      "description": "The paragraph 'Aradığınız sayfa taşınmış veya hiç var olmamış olabilir.' is visible"
+    },
+    {
+      "type": "assertion",
+      "description": "The login form (email input with placeholder 'ornek@mail.com') is NOT present on this page"
+    }
+  ]
+}

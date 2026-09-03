@@ -1,0 +1,43 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "İnceleme Bekleyenler paneli — üç bölüm açılır ve boş durumları gösterir",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "action",
+      "description": "Click the header button 'İnceleme Bekleyenler' and wait 3 seconds. SAFETY RULE: this panel's buttons ('Stoktan Düş', 'Konsinyeye Aktar', 'Gizle', 'İşareti Kaldır') permanently modify live production data. Never click any of them. Only read and close."
+    },
+    {
+      "type": "assertion",
+      "description": "A panel titled 'İnceleme Bekleyenler' is visible"
+    },
+    {
+      "type": "assertion",
+      "description": "The panel shows all three section headings: 'Manuel İşaretlenenler — Test / Konsinye', 'SCT — Mikro'da 15+ Gündür Faturasız' and 'Diğer / Beklenmedik'"
+    },
+    {
+      "type": "assertion",
+      "description": "The 'Manuel İşaretlenenler' section's table shows exactly the empty-state text 'Manuel işaretli ürün yok.'"
+    },
+    {
+      "type": "assertion",
+      "description": "The 'SCT' section's table shows exactly the empty-state text 'İnceleme bekleyen kayıt yok.'"
+    },
+    {
+      "type": "assertion",
+      "description": "The 'Diğer / Beklenmedik' section's table shows exactly the empty-state text 'İnceleme bekleyen kayıt yok.'"
+    },
+    {
+      "type": "action",
+      "description": "Close the panel without clicking any action button"
+    },
+    {
+      "type": "assertion",
+      "description": "The 'İnceleme Bekleyenler' panel is no longer visible"
+    }
+  ]
+}

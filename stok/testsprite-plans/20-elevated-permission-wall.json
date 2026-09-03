@@ -1,0 +1,39 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Yetkili hesap — düzenleme araçları açık, admin'e özel olanlar hâlâ kapalı",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible. SAFETY RULE: this account can modify live production data. Do not click 'Ürün Ekle', do not submit any form, do not click any row action button. Only observe what is rendered, plus the one explicitly instructed 'Geçmiş' click."
+    },
+    {
+      "type": "assertion",
+      "description": "The button 'Ürün Ekle' is now visible on the dashboard"
+    },
+    {
+      "type": "assertion",
+      "description": "The header buttons 'Konsinye Deposu' and 'İnceleme Bekleyenler' are both visible"
+    },
+    {
+      "type": "assertion",
+      "description": "Prices are no longer masked: the stat card 'Toplam Stok Değeri' shows a real value (not '—' and not the subtext 'Yetkisiz alan'), and product rows show € amounts in the 'Fiyat' column instead of '—'"
+    },
+    {
+      "type": "assertion",
+      "description": "IMPORTANT — judge visibility by the RENDERED page, not the HTML source: an element with CSS 'display: none' counts as NOT visible. Under that rule, the admin/user-management button (id 'admin-panel-btn', title 'Yönetim Paneli') is NOT visible, because this account lacks the admin permission."
+    },
+    {
+      "type": "assertion",
+      "description": "In the products table, a row's action cell renders the buttons titled 'Stok Çıkar (Satış)', 'Düzenle' and 'Hareket Geçmişi', but renders NO button titled 'Sil' (delete is admin-only). Do not click any of them."
+    },
+    {
+      "type": "action",
+      "description": "Click the 'İşlemler' dropdown, then click the item labelled 'Geçmiş' and wait 3 seconds. This is read-only and safe."
+    },
+    {
+      "type": "assertion",
+      "description": "A modal titled 'Stok Hareket Geçmişi' is now visible, its type filter's first option is 'Tüm İşlemler', and its table shows at least one row with a date/time value"
+    }
+  ]
+}

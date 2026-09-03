@@ -1,0 +1,39 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Konsinye Deposu paneli — açılır ve konsinye ürünü listeler",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "action",
+      "description": "Click the header button 'Konsinye Deposu' and wait 3 seconds for the panel to load. SAFETY RULE for the whole test: this panel contains buttons that permanently modify live production stock. Never click 'Ana Stoğa İade' or 'Faturalandı'. Only read and close."
+    },
+    {
+      "type": "assertion",
+      "description": "A panel titled 'Konsinye Deposu' is visible with the section heading 'Konsinyede Bekleyen Ürünler'"
+    },
+    {
+      "type": "assertion",
+      "description": "The panel's table header cells include 'Ürün' and 'Konsinye'"
+    },
+    {
+      "type": "assertion",
+      "description": "The table contains a row for the product named 'Konsinye Demo Ürünü' whose barcode cell reads 'KONSINYE-DEMO-01', whose main stock cell reads '0' and whose consignment cell reads '5'"
+    },
+    {
+      "type": "assertion",
+      "description": "That same row renders two buttons labelled 'Ana Stoğa İade' and 'Faturalandı'. Confirm they are rendered but DO NOT click either of them."
+    },
+    {
+      "type": "action",
+      "description": "Close the panel using its close control (or the overlay), without clicking any action button"
+    },
+    {
+      "type": "assertion",
+      "description": "The 'Konsinye Deposu' panel is no longer visible and the products dashboard is shown again"
+    }
+  ]
+}

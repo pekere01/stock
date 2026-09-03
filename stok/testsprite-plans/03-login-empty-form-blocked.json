@@ -1,0 +1,27 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Giriş — boş form tarayıcı doğrulamasıyla engellenir",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/"
+    },
+    {
+      "type": "action",
+      "description": "Leave both email and password inputs empty and click the 'Giriş Yap' button"
+    },
+    {
+      "type": "assertion",
+      "description": "The browser's native required-field validation blocks submission: the email input is reported invalid (validity.valueMissing is true) and focus moves to it"
+    },
+    {
+      "type": "assertion",
+      "description": "The inline error element with id 'auth-error' remains empty (no 'E-posta veya şifre hatalı.' text)"
+    },
+    {
+      "type": "assertion",
+      "description": "The button text is still 'Giriş Yap' (it never changed to 'Lütfen bekle...')"
+    }
+  ]
+}

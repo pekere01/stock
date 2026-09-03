@@ -1,0 +1,23 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Ürünler — kategori filtresi tabloyu daraltır",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "action",
+      "description": "Read the total N from the pagination text '<N> üründen ... gösteriliyor', then open the category select 'Tüm Kategoriler', note the second option's text, select it and wait 2 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "The products table shows at least 1 row and every visible row's 'Kategori' cell text equals the selected category name"
+    },
+    {
+      "type": "assertion",
+      "description": "The pagination text now shows a total that is smaller than or equal to the N read before filtering"
+    }
+  ]
+}

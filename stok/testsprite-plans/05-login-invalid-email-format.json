@@ -1,0 +1,23 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Giriş — geçersiz e-posta biçimi engellenir",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/"
+    },
+    {
+      "type": "action",
+      "description": "Type 'notanemail' into the email input and 'sifre123' into the password input, then click 'Giriş Yap'"
+    },
+    {
+      "type": "assertion",
+      "description": "The email input is reported invalid by native validation (validity.typeMismatch is true) and the form is not submitted"
+    },
+    {
+      "type": "assertion",
+      "description": "The 'auth-error' element stays empty"
+    }
+  ]
+}

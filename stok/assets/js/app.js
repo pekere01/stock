@@ -997,6 +997,7 @@ const EXPORT_FILTER_SUFFIX = {
 };
 
 export function openExportModal() {
+  if (isViewOnly()) return;
   document.getElementById('export-modal').classList.add('visible');
   lockBodyScroll();
 }
@@ -1007,6 +1008,8 @@ export function closeExportModal() {
 export function closeExportOnOverlay(e) { if (e.target.id === 'export-modal') closeExportModal(); }
 
 export async function exportCSV(status = '') {
+  // window.exportCSV global olarak bridge'li — butonu gizlemek tek basina yeterli degil.
+  if (isViewOnly()) return;
   const categoryEl = document.getElementById('export-category');
   const category = categoryEl ? categoryEl.value : '';
   closeExportModal();

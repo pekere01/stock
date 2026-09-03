@@ -1,0 +1,27 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Ürünler — 'Tükendi' filtresi sadece stok 0 gösterir",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible"
+    },
+    {
+      "type": "action",
+      "description": "In the status select (default option 'Stokta Olanlar') choose the option 'Tükendi' and wait 2 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "Every visible product row shows 0 in the 'Stok' column, OR the empty state 'Ürün bulunamadı' is shown if no product is out of stock"
+    },
+    {
+      "type": "action",
+      "description": "Change the status select back to 'Stokta Olanlar' and wait 2 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "Every visible product row shows a 'Stok' value greater than 0"
+    }
+  ]
+}

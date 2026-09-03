@@ -1,0 +1,23 @@
+{
+  "projectId": "a883f99c-4d00-4b86-8c62-061f1c6db92a",
+  "type": "frontend",
+  "name": "Başlık — EUR/TRY kuru canlı API'den yüklenir",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://soncagstock.vercel.app/ and log in with the project's configured username and password (click 'Giriş Yap'), wait until the header text 'Sonçağ Stok · Dashboard' is visible, then wait 5 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "The header EUR widget shows '€1 =' followed by a numeric value greater than 0 (not the placeholder '--') and the '₺' symbol"
+    },
+    {
+      "type": "action",
+      "description": "Click the refresh icon button inside the EUR widget and wait 3 seconds"
+    },
+    {
+      "type": "assertion",
+      "description": "The EUR value is still a number greater than 0 and no error toast is shown"
+    }
+  ]
+}
