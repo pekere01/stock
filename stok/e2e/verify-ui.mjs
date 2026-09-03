@@ -10,7 +10,8 @@
  * butonuna tiklamaz. Panelleri acar, okur, kendi close fonksiyonuyla kapatir.
  *
  * Kullanim:
- *   node verify-ui.mjs --email <adres> --password-file <yol> [--profile editor|viewer]
+ *   node verify-ui.mjs --email <adres> --password-file <yol>
+ *        [--profile noaccess|viewer|editor] veya [--perms view,make_sales,...]
  *   node verify-ui.mjs ... --json      # ham gozlemi JSON bas
  *   node verify-ui.mjs ... --headed    # tarayiciyi gorunur ac
  */
@@ -37,30 +38,51 @@ if (!EMAIL || !PASSWORD_FILE) {
 const PASSWORD = readFileSync(PASSWORD_FILE, 'utf8').trim();
 
 /**
- * Beklenen profiller.
- * isViewOnly() = add_products/make_sales/manage_categories/admin hepsi false demek.
- * canMoveStock() = add_products veya make_sales.
+ * Beklentiler sabit profil degil, yetki listesinden HESAPLANIR — auth.js ve
+ * app.js'teki kurallarin birebir aynasi. Boylece yetki kombinasyonu degisince
+ * script'i elle guncellemek gerekmez.
+ *
+ *   isViewOnly()   = add_products/make_sales/manage_categories/admin hepsi false
+ *   canMoveStock() = add_products veya make_sales
  */
-const PROFILES = {
-  viewer: {
-    addProductBtn: false, invoiceDropdown: false, categoryItem: false, importItem: false,
-    adminBtn: false, konsinyeBtn: false, reviewBtn: false,
-    pricesMasked: true,
-    rowButtons: { sale: false, edit: false, delete: false, history: false },
-  },
-  editor: {
-    addProductBtn: true, invoiceDropdown: true, categoryItem: true, importItem: true,
-    adminBtn: false, konsinyeBtn: true, reviewBtn: true,
-    pricesMasked: false,
-    rowButtons: { sale: true, edit: true, delete: false, history: true },
-  },
+const PRESETS = {
+  noaccess: [],
+  viewer:   ['view'],
+  editor:   ['view', 'add_products', 'make_sales', 'manage_categories', 'view_history'],
 };
 
-const expected = PROFILES[PROFILE];
-if (!expected) {
-  console.error(`HATA: bilinmeyen profil '${PROFILE}'. Secenekler: ${Object.keys(PROFILES).join(', ')}`);
+const permsArg = arg('perms');
+const permList = permsArg
+  ? permsArg.split(',').map((x) => x.trim()).filter(Boolean)
+  : PRESETS[PROFILE];
+
+if (!permList) {
+  console.error(`HATA: bilinmeyen profil '${PROFILE}'. Secenekler: ${Object.keys(PRESETS).join(', ')}`);
+  console.error("Ya da yetkileri dogrudan ver: --perms view,make_sales,add_products");
   process.exit(2);
 }
+
+const permSet = new Set(permList);
+const can = (p) => permSet.has(p) || permSet.has('admin');
+const isViewOnly   = !(can('add_products') || can('make_sales') || can('manage_categories') || can('admin'));
+const canMoveStock = can('add_products') || can('make_sales');
+
+const expected = {
+  addProductBtn:   can('add_products'),
+  invoiceDropdown: can('make_sales'),
+  categoryItem:    can('manage_categories'),
+  importItem:      can('add_products'),
+  adminBtn:        can('admin'),
+  konsinyeBtn:     canMoveStock,
+  reviewBtn:       canMoveStock,
+  pricesMasked:    isViewOnly,
+  rowButtons: {
+    sale:    can('make_sales'),
+    edit:    can('add_products'),
+    delete:  can('admin'),
+    history: can('view_history'),
+  },
+};
 
 const results = [];
 const check = (name, actual, want) => {
@@ -205,9 +227,9 @@ try {
 }
 
 if (AS_JSON) {
-  console.log(JSON.stringify({ profile: PROFILE, observation, results }, null, 2));
+  console.log(JSON.stringify({ perms: permList, observation, results }, null, 2));
 } else {
-  console.log(`\nProfil: ${PROFILE}  ·  Hedef: ${URL}  ·  Hesap: ${EMAIL}\n`);
+  console.log(`\nYetkiler: ${permList.join(', ') || '(hicbiri)'}  ·  Hedef: ${URL}  ·  Hesap: ${EMAIL}\n`);
   for (const r of results) {
     const detail = r.ok ? '' : `  (gözlenen: ${JSON.stringify(r.actual)}, beklenen: ${JSON.stringify(r.want)})`;
     console.log(`  ${r.ok ? 'GEÇTİ' : 'KALDI'}  ${r.name}${detail}`);
