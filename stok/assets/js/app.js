@@ -1026,7 +1026,9 @@ function loadExportColumnPrefs() {
   if (exportColumnKeys) return exportColumnKeys;
   try {
     const saved = JSON.parse(localStorage.getItem(EXPORT_COLS_KEY) || 'null');
-    exportColumnKeys = Array.isArray(saved) && saved.length
+    // saved === [] (kullanici hepsini kapatmis) gecerli bir tercihtir, "kayit yok"
+    // anlamina gelmez — bu yuzden .length degil sadece dizi olup olmadigina bakilir.
+    exportColumnKeys = Array.isArray(saved)
       ? EXPORT_COLUMN_DEFS.map(c => c.key).filter(k => saved.includes(k))
       : EXPORT_COLUMN_DEFS.map(c => c.key);
   } catch {
