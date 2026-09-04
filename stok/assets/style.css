@@ -13,7 +13,7 @@
     --glass-bg-strong: rgba(255,255,255,0.07);
     --glass-border: rgba(255,255,255,0.10);
     --glass-border-strong: rgba(255,255,255,0.18);
-    --glass-blur: 18px;
+    --glass-blur: 14px;
     --glass-highlight: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 55%);
     /* metin */
     --text-primary: #EDEDF2;
@@ -88,33 +88,26 @@
     position: absolute;
     display: block;
     border-radius: 50%;
-    filter: blur(110px);
-    opacity: 0.35;
-    mix-blend-mode: screen;
-    will-change: transform;
+    filter: blur(100px);
+    opacity: 0.38;
+    transform: translateZ(0); /* tek sefer rasterize, sonra statik */
   }
   .aurora i:nth-child(1) {
     width: 38rem; height: 38rem;
     top: -14rem; left: -10rem;
     background: var(--violet);
-    animation: drift-a 48s ease-in-out infinite alternate;
   }
   .aurora i:nth-child(2) {
     width: 30rem; height: 30rem;
     top: 30%; right: -12rem;
     background: var(--cyan);
-    animation: drift-b 56s ease-in-out infinite alternate;
   }
   .aurora i:nth-child(3) {
     width: 34rem; height: 34rem;
     bottom: -16rem; left: 28%;
     background: var(--pink);
-    opacity: 0.22;
-    animation: drift-c 62s ease-in-out infinite alternate;
+    opacity: 0.24;
   }
-  @keyframes drift-a { to { transform: translate(120px, 90px) scale(1.08); } }
-  @keyframes drift-b { to { transform: translate(-140px, -110px) scale(0.94); } }
-  @keyframes drift-c { to { transform: translate(90px, -130px) scale(1.05); } }
 
   /* ==== CAM YÜZEY ==== */
   .glass {
@@ -340,7 +333,6 @@
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    backdrop-filter: blur(10px);
     transition: transform 0.15s var(--ease-out), background 0.15s;
     font-family: inherit;
   }
@@ -395,7 +387,6 @@
     background: var(--glass-bg);
     color: var(--text-primary);
     border: 1px solid var(--glass-border);
-    backdrop-filter: blur(10px);
   }
   .btn-secondary:hover {
     background: var(--glass-bg-strong);
@@ -578,8 +569,7 @@
 
   .tooltip {
     position: fixed;
-    background: rgba(13,13,20,0.92);
-    backdrop-filter: blur(12px);
+    background: rgba(13,13,20,0.96);
     color: var(--text-primary);
     padding: 8px 12px;
     border-radius: 10px;
@@ -691,13 +681,15 @@
     pointer-events: none;
     transition: opacity 0.14s ease, transform 0.18s var(--ease-out);
     z-index: 200;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    visibility: hidden;
   }
   .dropdown.open .dropdown-menu {
     opacity: 1;
+    visibility: visible;
     transform: translateY(0) scale(1);
     pointer-events: auto;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
   .dropdown-item {
     display: flex;
@@ -752,9 +744,7 @@
     position: sticky;
     top: 0;
     z-index: 2;
-    background: rgba(13,13,20,0.78);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(13,13,20,0.94);
     color: var(--text-secondary);
     text-align: left;
     padding: 13px 16px;
@@ -904,7 +894,6 @@
     border-radius: 999px;
     font-size: 12.5px;
     cursor: pointer;
-    backdrop-filter: blur(10px);
     transition: background 0.15s, border-color 0.15s;
   }
   .pag-btn:hover:not(:disabled) { background: var(--violet); border-color: var(--violet); }
@@ -931,17 +920,23 @@
     position: fixed;
     inset: 0;
     background: rgba(7,7,11,0.62);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 200;
     opacity: 0;
+    visibility: hidden; /* kapalıyken boyanmaz: 10 tam ekran katman GPU'ya binmesin */
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
   }
-  .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+  .modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 0.2s ease, visibility 0s;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
   .modal {
     position: relative;
     background: rgba(21,19,31,0.9);
@@ -1141,8 +1136,6 @@
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: 999px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     font-size: 12px;
     color: var(--text-secondary);
     white-space: nowrap;
@@ -1222,7 +1215,6 @@
 
   /* ==== HAREKET AZALTMA ==== */
   @media (prefers-reduced-motion: reduce) {
-    .aurora i { animation: none !important; }
     .stat-card, .chart-card, .filter-bar, .table-wrap, tbody tr { animation: none !important; opacity: 1 !important; transform: none !important; }
     .rail, .rail-label, .btn, .stat-card, .modal, .toast { transition: none !important; }
   }
@@ -1240,6 +1232,12 @@
 
   @media (max-width: 768px) {
     .app-container { padding: 16px; }
+    .stat-card, .chart-card, .filter-bar, .table-wrap, .admin-card, .admin-table-wrap, .rail, .glass {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background: rgba(13,13,20,0.86);
+    }
+    .aurora i { filter: blur(70px); }
     .app-shell { grid-template-columns: 1fr; }
     .app-shell .content { padding: 18px 14px 32px; }
 
@@ -1489,8 +1487,6 @@
     border-radius: 999px;
     padding: 4px;
     margin-bottom: 20px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
   }
   .admin-tab-btn {
     padding: 9px 18px;
