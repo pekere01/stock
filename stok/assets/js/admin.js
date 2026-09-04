@@ -25,14 +25,14 @@ const LOG_TYPE_META = {
   delete:       { label: 'Silindi',             color: 'var(--error)' },
   in:           { label: '↑ Stok Girişi',       color: 'var(--success)' },
   out:          { label: '↓ Stok Çıkışı',       color: 'var(--error)' },
-  sale:         { label: '🛒 Satış',            color: '#f97316' },
-  bileme_kaplama:  { label: '🔧 Bileme/Kaplama', color: '#a855f7' },
-  edit:         { label: 'Düzenlendi',          color: 'var(--accent)' },
+  sale:         { label: '🛒 Satış',            color: '#FB923C' },
+  bileme_kaplama:  { label: '🔧 Bileme/Kaplama', color: '#C084FC' },
+  edit:         { label: 'Düzenlendi',          color: '#67E8F9' },
   price_change: { label: 'Fiyat Değişti',       color: 'var(--warning)' },
-  import:       { label: '↑ İçe Aktarıldı',     color: '#8b5cf6' },
-  konsinye_out:    { label: '📦 Konsinyeye Çıktı',  color: '#0ea5e9' },
+  import:       { label: '↑ İçe Aktarıldı',     color: '#A78BFA' },
+  konsinye_out:    { label: '📦 Konsinyeye Çıktı',  color: '#38BDF8' },
   konsinye_return: { label: '↩️ Konsinyeden İade', color: 'var(--success)' },
-  konsinye_sale:   { label: '🧾 Konsinye Fatura',   color: '#f97316' },
+  konsinye_sale:   { label: '🧾 Konsinye Fatura',   color: '#FB923C' },
 };
 
 // Kullanıcı listesindeki aksiyon butonları inline onclick="fn('${email}')" yerine

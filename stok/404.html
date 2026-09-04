@@ -7,15 +7,24 @@
 <link rel="icon" type="image/jpeg" href="./logo.jfif">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     height: 100%;
-    background: #080808;
-    color: #f0f0f0;
-    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #07070B;
+    color: #EDEDF2;
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow: hidden;
   }
+  .aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .aurora i {
+    position: absolute; display: block; border-radius: 50%;
+    filter: blur(110px); opacity: .35; mix-blend-mode: screen;
+  }
+  .aurora i:nth-child(1) { width: 38rem; height: 38rem; top: -14rem; left: -10rem; background: #7C3AED; }
+  .aurora i:nth-child(2) { width: 30rem; height: 30rem; top: 30%; right: -12rem; background: #06B6D4; }
+  .aurora i:nth-child(3) { width: 34rem; height: 34rem; bottom: -16rem; left: 28%; background: #F472B6; opacity: .22; }
   body {
     display: flex;
     align-items: center;
@@ -24,53 +33,60 @@
     padding: 24px;
   }
   .card {
+    position: relative;
+    z-index: 1;
     max-width: 420px;
+    width: 100%;
+    padding: 40px 32px;
+    background: rgba(21,19,31,0.72);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 22px;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 40px 100px rgba(0,0,0,0.6), 0 0 90px rgba(124,58,237,0.18);
   }
   .logo {
     width: 56px;
     height: 56px;
-    border-radius: 14px;
+    border-radius: 16px;
     margin: 0 auto 24px;
     display: block;
     object-fit: cover;
+    box-shadow: 0 10px 30px rgba(124,58,237,0.25);
   }
   .code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 72px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, #A78BFA 0%, #22D3EE 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
     line-height: 1;
     margin-bottom: 12px;
   }
-  h1 {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-  p {
-    font-size: 14px;
-    color: #888;
-    margin-bottom: 28px;
-  }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  p { font-size: 14px; color: #A1A1AA; margin-bottom: 28px; }
   a.btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: #3b82f6;
+    background: #7C3AED;
     color: #fff;
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
     padding: 11px 22px;
-    border-radius: 10px;
-    transition: background 0.2s;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(124,58,237,0.3);
+    transition: background 0.2s, transform 0.2s;
   }
-  a.btn:hover { background: #2563eb; }
+  a.btn:hover { background: #8B5CF6; transform: translateY(-1px); }
 </style>
 </head>
 <body>
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="card">
     <img class="logo" src="./logo.jfif" alt="Sonçağ">
     <div class="code">404</div>
