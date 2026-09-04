@@ -11,9 +11,9 @@ import { closePermModal } from './admin.js';
 const EUR_RATE_KEY = 'stok-dashboard-eur-rate';
 
 const CATEGORY_PALETTE = [
-  '#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444',
-  '#06b6d4', '#ec4899', '#10b981', '#f97316', '#6366f1',
-  '#14b8a6', '#a855f7', '#eab308', '#84cc16', '#0ea5e9'
+  '#A78BFA', '#22D3EE', '#F472B6', '#FBBF24', '#34D399',
+  '#60A5FA', '#FB923C', '#E879F9', '#2DD4BF', '#818CF8',
+  '#F87171', '#A3E635', '#38BDF8', '#C084FC', '#FCD34D'
 ];
 
 let products = [];
@@ -256,7 +256,7 @@ function renderPie() {
   let html = `<svg viewBox="0 0 ${size} ${size}" width="100%" style="max-width:280px;margin:0 auto;display:block;">`;
 
   if (total === 0) {
-    html += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="14">Veri yok</text></svg>`;
+    html += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--text-secondary)" font-size="14">Veri yok</text></svg>`;
     wrap.innerHTML = html;
     legend.innerHTML = '';
     return;
@@ -273,14 +273,14 @@ function renderPie() {
     const large = sliceAngle > Math.PI ? 1 : 0;
     const path = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${large} 0 ${ix2} ${iy2} Z`;
     const pct = ((d.value / total) * 100).toFixed(1);
-    html += `<path d="${path}" fill="${d.color}" stroke="#1a1a1a" stroke-width="2" class="pie-slice"
+    html += `<path d="${path}" fill="${d.color}" stroke="rgba(7,7,11,0.85)" stroke-width="2" class="pie-slice"
       data-label="${escapeHtml(d.label)}" data-value="${d.value}" data-pct="${pct}"
       style="transform-origin:${cx}px ${cy}px;transition:transform 0.2s ease;opacity:0;animation:pieIn 0.6s ease ${i * 0.1}s forwards;cursor:pointer;"></path>`;
     cumAngle = endAngle;
   });
 
-  html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" fill="#f5f5f5" font-size="28" font-weight="700">${total}</text>`;
-  html += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="11">Toplam Ürün</text>`;
+  html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--text-primary);font-family:var(--font-mono)" font-size="28" font-weight="500">${total}</text>`;
+  html += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--text-secondary)" font-size="11">Toplam Ürün</text>`;
   html += `</svg>`;
 
   if (!document.getElementById('pie-anim-style')) {
@@ -293,8 +293,8 @@ function renderPie() {
   wrap.innerHTML = html;
   legend.innerHTML = data.map(d => `
     <div class="legend-item">
-      <span class="legend-color" style="background:${d.color}"></span>
-      <span>${escapeHtml(d.label)} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
+      <span class="legend-color" style="background:${d.color};color:${d.color}"></span>
+      <span>${escapeHtml(d.label)} <span style="color:var(--text-primary);font-weight:500;font-family:var(--font-mono)">${d.value}</span></span>
     </div>`).join('');
 
   wrap.querySelectorAll('.pie-slice').forEach(el => {
@@ -320,7 +320,7 @@ function renderPieFromSummary() {
   let html = `<svg viewBox="0 0 ${size} ${size}" width="100%" style="max-width:280px;margin:0 auto;display:block;">`;
 
   if (total === 0) {
-    html += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="14">Veri yok</text></svg>`;
+    html += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--text-secondary)" font-size="14">Veri yok</text></svg>`;
     wrap.innerHTML = html;
     legend.innerHTML = '';
     return;
@@ -337,14 +337,14 @@ function renderPieFromSummary() {
     const large = sliceAngle > Math.PI ? 1 : 0;
     const path  = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${large} 0 ${ix2} ${iy2} Z`;
     const pct   = ((d.value / total) * 100).toFixed(1);
-    html += `<path d="${path}" fill="${d.color}" stroke="#1a1a1a" stroke-width="2" class="pie-slice"
+    html += `<path d="${path}" fill="${d.color}" stroke="rgba(7,7,11,0.85)" stroke-width="2" class="pie-slice"
       data-label="${escapeHtml(d.label)}" data-value="${d.value}" data-pct="${pct}"
       style="transform-origin:${cx}px ${cy}px;transition:transform 0.2s ease;opacity:0;animation:pieIn 0.6s ease ${i * 0.1}s forwards;cursor:pointer;"></path>`;
     cumAngle = endAngle;
   });
 
-  html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" fill="#f5f5f5" font-size="28" font-weight="700">${total}</text>`;
-  html += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" dominant-baseline="middle" fill="#a0a0a0" font-size="11">Toplam Ürün</text>`;
+  html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--text-primary);font-family:var(--font-mono)" font-size="28" font-weight="500">${total}</text>`;
+  html += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--text-secondary)" font-size="11">Toplam Ürün</text>`;
   html += `</svg>`;
 
   if (!document.getElementById('pie-anim-style')) {
@@ -357,8 +357,8 @@ function renderPieFromSummary() {
   wrap.innerHTML = html;
   legend.innerHTML = data.map(d => `
     <div class="legend-item">
-      <span class="legend-color" style="background:${d.color}"></span>
-      <span>${escapeHtml(d.label)} <span style="color:#f5f5f5;font-weight:600;">${d.value}</span></span>
+      <span class="legend-color" style="background:${d.color};color:${d.color}"></span>
+      <span>${escapeHtml(d.label)} <span style="color:var(--text-primary);font-weight:500;font-family:var(--font-mono)">${d.value}</span></span>
     </div>`).join('');
 
   wrap.querySelectorAll('.pie-slice').forEach(el => {
@@ -388,8 +388,8 @@ function renderBar() {
   for (let i = 0; i <= 5; i++) {
     const y = pad.t + (innerH * i / 5);
     const v = Math.round(niceMax * (1 - i / 5));
-    html += `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" stroke="#2a2a2a" stroke-width="1"/>`;
-    html += `<text x="${pad.l - 8}" y="${y + 4}" text-anchor="end" fill="#a0a0a0" font-size="10">${v}</text>`;
+    html += `<line x1="${pad.l}" y1="${y}" x2="${w - pad.r}" y2="${y}" style="stroke:var(--border-subtle)" stroke-width="1"/>`;
+    html += `<text x="${pad.l - 8}" y="${y + 4}" text-anchor="end" style="fill:var(--text-muted)" font-size="10">${v}</text>`;
   }
   top.forEach((p, i) => {
     const barH = (p.sales7d / niceMax) * innerH;
@@ -397,18 +397,18 @@ function renderBar() {
     const y = pad.t + innerH - barH;
     const shortName = p.name.length > 14 ? p.name.slice(0, 12) + '…' : p.name;
     const color = CATEGORY_PALETTE[i % CATEGORY_PALETTE.length];
-    html += `<rect x="${x}" y="${pad.t + innerH}" width="${barW}" height="0" rx="4"
+    html += `<rect x="${x}" y="${pad.t + innerH}" width="${barW}" height="0" rx="6"
       fill="${color}" class="bar-rect"
       data-label="${escapeHtml(p.name)}" data-value="${p.sales7d}"
       style="cursor:pointer;transition:fill 0.2s;">
       <animate attributeName="height" from="0" to="${barH}" dur="0.8s" begin="${i * 0.07}s" fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1"/>
       <animate attributeName="y" from="${pad.t + innerH}" to="${y}" dur="0.8s" begin="${i * 0.07}s" fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1"/>
     </rect>`;
-    html += `<text x="${x + barW / 2}" y="${y - 6}" text-anchor="middle" fill="#f5f5f5" font-size="11" font-weight="600" opacity="0">
+    html += `<text x="${x + barW / 2}" y="${y - 6}" text-anchor="middle" style="fill:var(--text-primary);font-family:var(--font-mono)" font-size="11" font-weight="500" opacity="0">
       ${p.sales7d}
       <animate attributeName="opacity" from="0" to="1" dur="0.4s" begin="${0.8 + i * 0.07}s" fill="freeze"/>
     </text>`;
-    html += `<text x="${x + barW / 2}" y="${pad.t + innerH + 18}" text-anchor="middle" fill="#a0a0a0" font-size="10" transform="rotate(-25 ${x + barW / 2} ${pad.t + innerH + 18})">${shortName}</text>`;
+    html += `<text x="${x + barW / 2}" y="${pad.t + innerH + 18}" text-anchor="middle" style="fill:var(--text-secondary)" font-size="10" transform="rotate(-25 ${x + barW / 2} ${pad.t + innerH + 18})">${shortName}</text>`;
   });
   html += `</svg>`;
   wrap.innerHTML = html;
