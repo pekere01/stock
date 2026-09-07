@@ -115,24 +115,17 @@ function productToDb(p) {
 // İ/I/ı/i ailesini açıkça [iİıI] karakter sınıfına çevirip locale'den bağımsız
 // hale getiriyoruz (bkz. imatch/regex kullanımı, loadData).
 // Mikro'dan gelen ürün adlarının ~%43'ünde çift/fazla boşluk var (sabit genişlikli
-// alan birleştirmesinden kalma) — arama teriminde tek boşluk yazan kullanıcı bu
-// ürünleri bulamıyordu. Her boşluk dizisini \s+ ile eşleştirip DB'deki fazla
-// boşluktan bağımsız hale getiriyoruz (2026-09-02, "T490 LNMT 1306PNTR IC808" bug'ı).
+// alan birleştirmesinden kalma), kullanıcı da arama terimini bazen boşluksuz
+// yazıyor ("bt50 em25x100fl"). Kullanıcının kendi boşluklarını tamamen atıp
+// kalan karakterler arasına \s* (DB'deki sıfır veya daha fazla boşlukla eşleşir)
+// koyarak hem fazla boşluğu hem eksik boşluğu tolere ediyoruz
+// (2026-09-02 çift boşluk fix'i + 2026-09-07 boşluksuz arama fix'i).
 function toTurkishSearchPattern(str) {
-  let out = '';
-  let i = 0;
-  while (i < str.length) {
-    const ch = str[i];
-    if (/\s/.test(ch)) {
-      out += '\\s+';
-      while (i < str.length && /\s/.test(str[i])) i++;
-      continue;
-    }
-    if ('iİıI'.includes(ch)) out += '[iİıI]';
-    else out += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    i++;
-  }
-  return out;
+  const chars = str.replace(/\s+/g, '').split('');
+  const parts = chars.map(ch =>
+    'iİıI'.includes(ch) ? '[iİıI]' : ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  return parts.join('\\s*');
 }
 
 export async function loadData(page = 0, recount = true) {
