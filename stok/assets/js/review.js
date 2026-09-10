@@ -47,7 +47,7 @@ function renderReviewRows(items, tbodyId, isSct = false) {
     const tdIslem = document.createElement('td');
     const btnReverse = document.createElement('button');
     btnReverse.className = 'btn btn-secondary';
-    btnReverse.textContent = 'Stoktan Düş';
+    btnReverse.textContent = 'Ürünü Stoğa Geri Ekle';
     btnReverse.onclick = () => window.reverseReviewItem(item.mikro_sth_guid);
     const btnDismiss = document.createElement('button');
     btnDismiss.className = 'btn btn-secondary';
