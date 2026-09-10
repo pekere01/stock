@@ -112,3 +112,43 @@ document.getElementById('confirm-btn').addEventListener('click', () => {
 
 window.closeConfirmModal     = closeConfirmModal;
 window.closeConfirmOnOverlay = closeConfirmOnOverlay;
+
+let pendingQtyConfirm = null;
+
+export function showQtyPrompt(title, max, onConfirm) {
+  document.getElementById('qty-modal-title').textContent = title;
+  const input = document.getElementById('qty-modal-input');
+  input.max = max;
+  input.value = max;
+  pendingQtyConfirm = onConfirm;
+  document.getElementById('qty-modal').classList.add('visible');
+  lockBodyScroll();
+  requestAnimationFrame(() => { input.focus(); input.select(); });
+}
+export function closeQtyModal() {
+  document.getElementById('qty-modal').classList.remove('visible');
+  pendingQtyConfirm = null;
+  unlockBodyScroll();
+}
+export function closeQtyModalOnOverlay(e) {
+  if (e.target.id === 'qty-modal') closeQtyModal();
+}
+function submitQtyPrompt() {
+  const input = document.getElementById('qty-modal-input');
+  const max = parseInt(input.max, 10);
+  const qty = parseInt(input.value, 10);
+  if (isNaN(qty) || qty < 1 || qty > max) {
+    toast('Geçersiz miktar.', 'error');
+    return;
+  }
+  const cb = pendingQtyConfirm;
+  closeQtyModal();
+  if (cb) cb(qty);
+}
+document.getElementById('qty-modal-btn').addEventListener('click', submitQtyPrompt);
+document.getElementById('qty-modal-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitQtyPrompt();
+});
+
+window.closeQtyModal        = closeQtyModal;
+window.closeQtyModalOnOverlay = closeQtyModalOnOverlay;

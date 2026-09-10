@@ -1,6 +1,6 @@
 import { sb } from './supabase.js';
 import { canDo } from './auth.js';
-import { friendlyError, lockBodyScroll, unlockBodyScroll } from './ui.js';
+import { friendlyError, lockBodyScroll, unlockBodyScroll, showConfirm, showQtyPrompt, toast } from './ui.js';
 
 function canMoveStock() {
   return canDo('add_products') || canDo('make_sales');
@@ -117,7 +117,7 @@ function renderInTestRows(items) {
 export async function clearInTestFlag(id) {
   const { error } = await sb.from('products').update({ in_test: false }).eq('id', id);
   if (error) {
-    alert('Hata: ' + friendlyError(error));
+    toast('Hata: ' + friendlyError(error), 'error');
     return;
   }
   await loadReviewPanel();
@@ -134,14 +134,15 @@ export async function loadReviewPanel() {
   renderInTestRows(inTest);
 }
 
-export async function konsinyeFromReview(guid) {
-  if (!confirm('Bu irsaliyeyi konsinye deposuna aktarmak istediğinize emin misiniz?')) return;
-  const { data, error } = await sb.rpc('konsinye_from_review', { p_guid: guid });
-  if (error || data?.error) {
-    alert('Hata: ' + (data?.error || friendlyError(error)));
-    return;
-  }
-  await loadReviewPanel();
+export function konsinyeFromReview(guid) {
+  showConfirm('Konsinye Deposuna Aktar', 'Bu irsaliyeyi konsinye deposuna aktarmak istediğinize emin misiniz?', async () => {
+    const { data, error } = await sb.rpc('konsinye_from_review', { p_guid: guid });
+    if (error || data?.error) {
+      toast('Hata: ' + (data?.error || friendlyError(error)), 'error');
+      return;
+    }
+    await loadReviewPanel();
+  });
 }
 
 /* ===== KONSİNYE DEPOSU PANELİ ===== */
@@ -205,7 +206,7 @@ export async function loadKonsinyePanel() {
 }
 
 export function openKonsinyePanel() {
-  if (!canMoveStock()) { alert('Bu işlem için yetkiniz yok'); return; }
+  if (!canMoveStock()) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
   document.getElementById('konsinye-panel').classList.add('visible');
   lockBodyScroll();
   loadKonsinyePanel();
@@ -220,45 +221,34 @@ export function closeKonsinyeOnOverlay(e) {
   if (e.target.id === 'konsinye-panel') closeKonsinyePanel();
 }
 
-function promptKonsinyeQty(max) {
-  const raw = prompt(`Miktar girin (en fazla ${max}):`, String(max));
-  if (raw === null) return null;
-  const qty = parseInt(raw, 10);
-  if (isNaN(qty) || qty < 1 || qty > max) {
-    alert('Geçersiz miktar.');
-    return null;
-  }
-  return qty;
+export function konsinyeReturn(productId, maxQty) {
+  showQtyPrompt('Ana Stoğa İade — Miktar', maxQty, async (qty) => {
+    const { data, error } = await sb.rpc('konsinye_return', { p_product_id: productId, p_qty: qty });
+    if (error || data?.error) {
+      toast('Hata: ' + (data?.error || friendlyError(error)), 'error');
+      return;
+    }
+    await loadKonsinyePanel();
+    if (window.loadData && window.renderAll) {
+      await window.loadData(0);
+      window.renderAll();
+    }
+  });
 }
 
-export async function konsinyeReturn(productId, maxQty) {
-  const qty = promptKonsinyeQty(maxQty);
-  if (qty === null) return;
-  const { data, error } = await sb.rpc('konsinye_return', { p_product_id: productId, p_qty: qty });
-  if (error || data?.error) {
-    alert('Hata: ' + (data?.error || friendlyError(error)));
-    return;
-  }
-  await loadKonsinyePanel();
-  if (window.loadData && window.renderAll) {
-    await window.loadData(0);
-    window.renderAll();
-  }
-}
-
-export async function konsinyeInvoice(productId, maxQty) {
-  const qty = promptKonsinyeQty(maxQty);
-  if (qty === null) return;
-  const { data, error } = await sb.rpc('konsinye_invoice', { p_product_id: productId, p_qty: qty });
-  if (error || data?.error) {
-    alert('Hata: ' + (data?.error || friendlyError(error)));
-    return;
-  }
-  await loadKonsinyePanel();
+export function konsinyeInvoice(productId, maxQty) {
+  showQtyPrompt('Faturalandı — Miktar', maxQty, async (qty) => {
+    const { data, error } = await sb.rpc('konsinye_invoice', { p_product_id: productId, p_qty: qty });
+    if (error || data?.error) {
+      toast('Hata: ' + (data?.error || friendlyError(error)), 'error');
+      return;
+    }
+    await loadKonsinyePanel();
+  });
 }
 
 export function openReviewPanel() {
-  if (!canMoveStock()) { alert('Bu işlem için yetkiniz yok'); return; }
+  if (!canMoveStock()) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
   document.getElementById('review-panel').classList.add('visible');
   lockBodyScroll();
   loadReviewPanel();
@@ -273,20 +263,21 @@ export function closeReviewOnOverlay(e) {
   if (e.target.id === 'review-panel') closeReviewPanel();
 }
 
-export async function reverseReviewItem(guid) {
-  if (!confirm('Bu irsaliyenin stoğunu geri almak istediğinize emin misiniz?')) return;
-  const { data, error } = await sb.rpc('manual_reverse_review', { p_guid: guid });
-  if (error || data?.error) {
-    alert('Hata: ' + (data?.error || friendlyError(error)));
-    return;
-  }
-  await loadReviewPanel();
+export function reverseReviewItem(guid) {
+  showConfirm('Ürünü Stoğa Geri Ekle', 'Bu irsaliyenin stoğunu geri almak istediğinize emin misiniz?', async () => {
+    const { data, error } = await sb.rpc('manual_reverse_review', { p_guid: guid });
+    if (error || data?.error) {
+      toast('Hata: ' + (data?.error || friendlyError(error)), 'error');
+      return;
+    }
+    await loadReviewPanel();
+  });
 }
 
 export async function dismissReviewItem(guid) {
   const { error } = await sb.rpc('dismiss_review', { p_guid: guid });
   if (error) {
-    alert('Hata: ' + friendlyError(error));
+    toast('Hata: ' + friendlyError(error), 'error');
     return;
   }
   await loadReviewPanel();

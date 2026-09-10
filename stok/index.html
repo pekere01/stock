@@ -680,6 +680,19 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="qty-modal" onclick="closeQtyModalOnOverlay(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width: 360px;">
+    <div class="modal-title" id="qty-modal-title" style="margin-bottom: 14px;">Miktar Girin</div>
+    <div class="form-field full">
+      <input type="number" id="qty-modal-input" min="1" step="1">
+    </div>
+    <div class="modal-actions" style="justify-content: center; margin-top: 16px;">
+      <button class="btn btn-secondary" onclick="closeQtyModal()">İptal</button>
+      <button class="btn btn-primary" id="qty-modal-btn">Tamam</button>
+    </div>
+  </div>
+</div>
+
 <!-- Export Modal -->
 <div class="modal-overlay" id="export-modal" onclick="closeExportOnOverlay(event)">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:420px;">
