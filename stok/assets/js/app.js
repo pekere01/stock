@@ -26,6 +26,7 @@ let dashboardSummary = null;
 
 /* import */
 let importRows = [];
+let importExistingMap = new Map();
 const IMPORT_COL_MAP = {
   name:     ['ürün adı','urun adi','ad','ürün','urun','name','product name','product','adi'],
   barcode:  ['barkod no','barkod','barcode','sku','stok kodu','kod'],
@@ -1447,6 +1448,7 @@ async function applyInvoiceStock(items, mode) {
 function openImportModal() {
   if (!canDo('add_products')) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
   importRows = [];
+  importExistingMap = new Map();
   document.getElementById('import-step-1').style.display = '';
   document.getElementById('import-step-2').style.display = 'none';
   document.getElementById('import-step-3').style.display = 'none';
@@ -1559,6 +1561,10 @@ async function processImportFile(file) {
 
     if (rows.length === 0) { errEl.textContent = 'Geçerli ürün satırı bulunamadı.'; return; }
 
+    errEl.textContent = 'Mevcut ürünlerle eşleştiriliyor…';
+    await _buildImportExistingMap(rows);
+    errEl.textContent = '';
+
     importRows = rows;
     renderImportPreview(rows);
     document.getElementById('import-step-1').style.display = 'none';
@@ -1568,12 +1574,46 @@ async function processImportFile(file) {
   }
 }
 
+// CSV'deki barkod/isimleri o an sayfalanmış (yalnızca PAGE_SIZE=50 kayıtlık)
+// `products` dizisiyle değil, doğrudan veritabanına sorup eşleştiriyoruz.
+// Önceki hâli sadece ekrandaki sayfayı kontrol ettiği için büyük dosyalarda
+// (yüzlerce satır) neredeyse her satırı yanlışlıkla "Yeni" sayıyordu ve hangi
+// satırların eşleştiği sayfa geçmişine göre her denemede değişiyordu
+// (2026-09-11, pekere bildirdi).
+async function _buildImportExistingMap(rows) {
+  importExistingMap = new Map();
+  const CHUNK = 150;
+  const cols = 'id,name,barcode,stock,min_stock,sales7d,status,cost_price,sale_price,warehouse_info,purchase_rate,sale_rate,in_test,consignment_stock,created_at';
+
+  const barcodes = [...new Set(rows.map(r => r.barcode).filter(Boolean))];
+  for (let i = 0; i < barcodes.length; i += CHUNK) {
+    const chunk = barcodes.slice(i, i + CHUNK);
+    const { data, error } = await sb.from('products').select(cols).in('barcode', chunk);
+    if (error) throw error;
+    for (const row of (data || [])) {
+      const p = dbToProduct(row);
+      if (p.barcode) importExistingMap.set('b:' + p.barcode.toLowerCase(), p);
+    }
+  }
+
+  const namesNeeded = [...new Set(rows.filter(r => !r.barcode).map(r => r.name).filter(Boolean))];
+  for (let i = 0; i < namesNeeded.length; i += CHUNK) {
+    const chunk = namesNeeded.slice(i, i + CHUNK);
+    const { data, error } = await sb.from('products').select(cols).in('name', chunk);
+    if (error) throw error;
+    for (const row of (data || [])) {
+      const p = dbToProduct(row);
+      if (p.name) importExistingMap.set('n:' + p.name.toLowerCase(), p);
+    }
+  }
+}
+
 function _findExisting(row) {
   if (row.barcode) {
-    const m = products.find(p => p.barcode && p.barcode.toLowerCase() === row.barcode.toLowerCase());
+    const m = importExistingMap.get('b:' + row.barcode.toLowerCase());
     if (m) return m;
   }
-  return products.find(p => p.name.toLowerCase() === row.name.toLowerCase()) || null;
+  return importExistingMap.get('n:' + row.name.toLowerCase()) || null;
 }
 
 function renderImportPreview(rows) {
@@ -1677,6 +1717,10 @@ async function executeImport() {
         logMovement({ productId: np.id, productName: np.name, type: 'import', quantity: np.stock, oldStock: 0, newStock: np.stock, newPrice: np.price, newCost: np.cost });
       }
     }
+    // Yerel `products` sadece geçerli sayfayı tutuyor — import DB'nin tamamını
+    // etkilediği için ekranı yamalamak yerine gerçek durumu yeniden çekiyoruz
+    // (dashboard özet sayıları da böylece güncellenir).
+    await loadData(currentPage);
     populateFilters();
     renderAll();
     document.getElementById('import-step-2').style.display = 'none';
