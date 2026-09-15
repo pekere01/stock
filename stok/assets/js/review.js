@@ -1,9 +1,13 @@
 import { sb } from './supabase.js';
-import { canDo } from './auth.js';
+import { canDo, isAdmin, currentPermissions } from './auth.js';
 import { friendlyError, lockBodyScroll, unlockBodyScroll, showConfirm, showQtyPrompt, toast } from './ui.js';
 
 function canMoveStock() {
   return canDo('add_products') || canDo('make_sales');
+}
+
+function canDeleteProducts() {
+  return isAdmin() || currentPermissions?.admin === true;
 }
 
 async function fetchReviewItems(kategori) {
@@ -61,6 +65,13 @@ function renderReviewRows(items, tbodyId, isSct = false) {
       btnKonsinye.textContent = 'Konsinye Deposuna Aktar';
       btnKonsinye.onclick = () => window.konsinyeFromReview(item.mikro_sth_guid);
       tdIslem.appendChild(btnKonsinye);
+    }
+    if (canDeleteProducts()) {
+      const btnDelete = document.createElement('button');
+      btnDelete.className = 'btn btn-danger';
+      btnDelete.textContent = 'Sil';
+      btnDelete.onclick = () => window.deleteReviewItemProduct(item.mikro_sth_guid, item.stok_kod);
+      tdIslem.appendChild(btnDelete);
     }
     tr.append(tdStok, tdIrsaliye, tdMiktar, tdGun, tdIslem);
     fragment.appendChild(tr);
@@ -194,10 +205,30 @@ function renderKonsinyeRows(items) {
     btnInvoice.onclick = () => window.konsinyeInvoice(item.id, item.consignment_stock);
     tdIslem.appendChild(btnReturn);
     tdIslem.appendChild(btnInvoice);
+    if (canDeleteProducts()) {
+      const btnDelete = document.createElement('button');
+      btnDelete.className = 'btn btn-danger';
+      btnDelete.textContent = 'Sil';
+      btnDelete.onclick = () => window.deleteKonsinyeProduct(item.id, item.name);
+      tdIslem.appendChild(btnDelete);
+    }
     tr.append(tdName, tdBarcode, tdStock, tdKonsinye, tdIslem);
     fragment.appendChild(tr);
   });
   tbody.appendChild(fragment);
+}
+
+export function deleteKonsinyeProduct(id, name) {
+  if (!canDeleteProducts()) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
+  showConfirm(`"${name}" silinecek`, 'Ürün kalıcı olarak silinecek. Bu işlem geri alınamaz.', async () => {
+    const { error } = await sb.from('products').delete().eq('id', id);
+    if (error) {
+      toast('Silme hatası: ' + friendlyError(error), 'error');
+      return;
+    }
+    await loadKonsinyePanel();
+    toast('Ürün silindi');
+  });
 }
 
 export async function loadKonsinyePanel() {
@@ -283,11 +314,32 @@ export async function dismissReviewItem(guid) {
   await loadReviewPanel();
 }
 
+export function deleteReviewItemProduct(guid, stokKod) {
+  if (!canDeleteProducts()) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
+  showConfirm(`"${stokKod || 'Bu kayıt'}" silinecek`, 'Ürün (varsa) kalıcı olarak silinecek ve bu inceleme kaydı kapatılacak. Bu işlem geri alınamaz.', async () => {
+    if (stokKod) {
+      const { error: delErr } = await sb.from('products').delete().eq('barcode', stokKod);
+      if (delErr) {
+        toast('Silme hatası: ' + friendlyError(delErr), 'error');
+        return;
+      }
+    }
+    const { data, error } = await sb.rpc('dismiss_review', { p_guid: guid });
+    if (error || data?.error) {
+      toast('Hata: ' + (data?.error || friendlyError(error)), 'error');
+      return;
+    }
+    await loadReviewPanel();
+    toast('Silindi');
+  });
+}
+
 window.openReviewPanel = openReviewPanel;
 window.closeReviewPanel = closeReviewPanel;
 window.closeReviewOnOverlay = closeReviewOnOverlay;
 window.reverseReviewItem = reverseReviewItem;
 window.dismissReviewItem = dismissReviewItem;
+window.deleteReviewItemProduct = deleteReviewItemProduct;
 window.clearInTestFlag = clearInTestFlag;
 window.konsinyeFromReview = konsinyeFromReview;
 window.openKonsinyePanel = openKonsinyePanel;
@@ -295,3 +347,4 @@ window.closeKonsinyePanel = closeKonsinyePanel;
 window.closeKonsinyeOnOverlay = closeKonsinyeOnOverlay;
 window.konsinyeReturn = konsinyeReturn;
 window.konsinyeInvoice = konsinyeInvoice;
+window.deleteKonsinyeProduct = deleteKonsinyeProduct;
