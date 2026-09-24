@@ -796,8 +796,10 @@
     margin-bottom: 2px;
   }
   .product-barcode {
-    font-size: 11px;
-    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cyan);
+    letter-spacing: 0.03em;
     font-family: var(--font-mono);
   }
 
