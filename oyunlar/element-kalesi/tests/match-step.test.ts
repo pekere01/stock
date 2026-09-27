@@ -63,8 +63,8 @@ describe('dalga akışı', () => {
 });
 
 describe('hareket ve kale', () => {
-  it('yol uzunluğu 1540', () => {
-    expect(PATH_LENGTH).toBe(1540);
+  it('yol uzunluğu 1910', () => {
+    expect(PATH_LENGTH).toBe(1910);
   });
 
   it('düşman hızıyla ilerler', () => {
@@ -111,11 +111,11 @@ describe('hareket ve kale', () => {
 });
 
 describe('savaş', () => {
-  // Yuva 0 merkezi (140,220). Yol üzerinde dist 250 → (140,130), mesafe 90.
+  // Yuva 0 merkezi (150,205). Yol üzerinde dist 240 → (150,150), mesafe 55.
   it('menzildeki düşmana vurur, bekleme süresi başlar, olay üretir', () => {
     const s = inWave();
     s.board[0] = { kind: 'base', element: 'fire', level: 1 };
-    const e = addEnemy(s, 'grunt', 250);
+    const e = addEnemy(s, 'grunt', 240);
     step(s, 16);
     expect(e.hp).toBe(22);
     expect(s.cooldowns[0]).toBe(900);
@@ -134,8 +134,8 @@ describe('savaş', () => {
   it('kaleye en yakın (en ilerideki) düşmanı hedefler', () => {
     const s = inWave();
     s.board[0] = { kind: 'base', element: 'ice', level: 1 };
-    const back = addEnemy(s, 'grunt', 230);
-    const front = addEnemy(s, 'grunt', 250);
+    const back = addEnemy(s, 'grunt', 220);
+    const front = addEnemy(s, 'grunt', 240);
     step(s, 16);
     expect(front.hp).toBe(26);
     expect(back.hp).toBe(30);
@@ -146,8 +146,8 @@ describe('savaş', () => {
   it('ateş çevreye alan hasarı verir', () => {
     const s = inWave();
     s.board[0] = { kind: 'base', element: 'fire', level: 1 };
-    const back = addEnemy(s, 'grunt', 230);
-    const front = addEnemy(s, 'grunt', 250);
+    const back = addEnemy(s, 'grunt', 220);
+    const front = addEnemy(s, 'grunt', 240);
     step(s, 16);
     expect(front.hp).toBe(22);
     expect(back.hp).toBe(26);
@@ -156,9 +156,9 @@ describe('savaş', () => {
   it('şimşek yakındaki 2 düşmana sekiyor', () => {
     const s = inWave();
     s.board[0] = { kind: 'base', element: 'lightning', level: 1 };
-    const a = addEnemy(s, 'grunt', 250);
-    const b = addEnemy(s, 'grunt', 230);
-    const c = addEnemy(s, 'grunt', 210);
+    const a = addEnemy(s, 'grunt', 240);
+    const b = addEnemy(s, 'grunt', 220);
+    const c = addEnemy(s, 'grunt', 200);
     step(s, 16);
     expect(a.hp).toBeCloseTo(24);
     expect(b.hp).toBeCloseTo(26.4);
@@ -168,7 +168,7 @@ describe('savaş', () => {
   it('doğa zehir uygular', () => {
     const s = inWave();
     s.board[0] = { kind: 'base', element: 'nature', level: 1 };
-    const e = addEnemy(s, 'grunt', 250);
+    const e = addEnemy(s, 'grunt', 240);
     step(s, 16);
     expect(e.hp).toBe(27);
     expect(e.poisonDps).toBe(6);
@@ -178,7 +178,7 @@ describe('savaş', () => {
   it('ölen düşman kaldırılır ve mana verir', () => {
     const s = inWave();
     s.board[0] = { kind: 'base', element: 'fire', level: 1 };
-    addEnemy(s, 'grunt', 250, 5);
+    addEnemy(s, 'grunt', 240, 5);
     addEnemy(s, 'grunt', 1000);
     step(s, 16);
     expect(s.enemies).toHaveLength(1);
