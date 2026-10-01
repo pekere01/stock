@@ -24,6 +24,16 @@ let editingCategoryName = null;
 let eurRate = parseFloat(localStorage.getItem(EUR_RATE_KEY)) || 34.00;
 let dashboardSummary = null;
 
+// Aynı ürün birden fazla depoda/çekmecede bulunabilir — yeni depo bilgisi
+// mevcut olanı SİLMEZ, virgülle ayrılmış listeye eklenir (zaten varsa tekrar eklenmez).
+function mergeDepo(existingDepo, incomingDepo) {
+  const incoming = (incomingDepo || '').trim();
+  if (!incoming) return existingDepo || null;
+  const parts = (existingDepo || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.some(p => p.toLowerCase() === incoming.toLowerCase())) return parts.join(', ');
+  return [...parts, incoming].join(', ');
+}
+
 /* import */
 let importRows = [];
 let importExistingMap = new Map();
@@ -640,7 +650,7 @@ export async function submitProductForm(e) {
       const newStatus = calcStatus({ ...dup, stock: newStock });
       const upd = { stock: newStock, status: newStatus, purchase_rate: eurRate };
       if (cost > 0) upd.cost_price     = cost;
-      if (depo)     upd.warehouse_info = depo;
+      if (depo)     upd.warehouse_info = mergeDepo(dup.depo, depo);
       const { error } = await sb.from('products').update(upd).eq('id', dup.id);
       if (error) throw error;
       logMovement({ productId: dup.id, productName: dup.name, type: 'in', quantity: stock, oldStock: newStock - stock, newStock, notes: 'Eşleşme ile stok artışı' });
@@ -1672,13 +1682,13 @@ async function executeImport() {
           const upd = { stock: newStock, status: newStatus };
           if (row.cost > 0)  upd.cost_price     = row.cost;
           if (row.price > 0) upd.sale_price      = row.price;
-          if (row.depo)      upd.warehouse_info  = row.depo;
+          if (row.depo)      upd.warehouse_info  = mergeDepo(existing.depo, row.depo);
           const { error } = await sb.from('products').update(upd).eq('id', existing.id);
           if (error) throw error;
           existing.stock = newStock; existing.status = newStatus;
           if (row.cost > 0)  existing.cost  = row.cost;
           if (row.price > 0) existing.price = row.price;
-          if (row.depo)      existing.depo  = row.depo;
+          if (row.depo)      existing.depo  = upd.warehouse_info;
           updateCount++;
           logMovement({ productId: existing.id, productName: existing.name, type: 'import', quantity: row.stock, oldStock: oldExStock, newStock });
         } else {
