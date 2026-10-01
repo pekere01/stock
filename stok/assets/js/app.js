@@ -1219,13 +1219,26 @@ function init() {
     const dateEl = document.getElementById('eur-rate-date');
     if (cached && dateEl) dateEl.textContent = 'önbellek';
   }
-  document.getElementById('search-input').addEventListener('input', e => {
+  const searchInput = document.getElementById('search-input');
+  const searchClearBtn = document.getElementById('search-clear-btn');
+  const toggleSearchClear = () => { if (searchClearBtn) searchClearBtn.style.display = searchInput.value ? 'flex' : 'none'; };
+  searchInput.addEventListener('input', e => {
+    toggleSearchClear();
     clearTimeout(_searchTimer);
     _searchTimer = setTimeout(async () => {
       pageSearch = e.target.value.trim();
       await loadData(0);
       renderAll();
     }, 400);
+  });
+  searchClearBtn?.addEventListener('click', async () => {
+    searchInput.value = '';
+    toggleSearchClear();
+    clearTimeout(_searchTimer);
+    pageSearch = '';
+    await loadData(0);
+    renderAll();
+    searchInput.focus();
   });
   document.getElementById('filter-category').addEventListener('change', async e => {
     pageCatFilter = e.target.value;

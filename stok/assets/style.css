@@ -612,7 +612,7 @@
     background: rgba(255,255,255,0.04);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
-    padding: 10px 14px 10px 38px;
+    padding: 10px 34px 10px 38px;
     border-radius: 12px;
     font-size: 13px;
     transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
@@ -623,7 +623,7 @@
     border-color: var(--violet);
     box-shadow: 0 0 0 3px var(--violet-soft);
   }
-  .search-box svg {
+  .search-box > svg {
     position: absolute;
     left: 13px;
     top: 50%;
@@ -631,6 +631,25 @@
     color: var(--text-muted);
     pointer-events: none;
   }
+  .search-box .search-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .search-box .search-clear:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
+  .search-box .search-clear svg { position: static; pointer-events: none; }
   .filter-bar select {
     background: rgba(255,255,255,0.04);
     border: 1px solid var(--glass-border);
