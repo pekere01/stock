@@ -1902,6 +1902,7 @@ window.executeImport             = executeImport;
 window.openHistoryModal          = openHistoryModal;
 window.closeHistoryModal         = closeHistoryModal;
 window.closeHistoryOnOverlay     = closeHistoryOnOverlay;
+window.loadHistory                = loadHistory;
 window.renderHistory             = renderHistory;
 
 init();
