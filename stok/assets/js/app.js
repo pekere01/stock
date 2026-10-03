@@ -53,6 +53,7 @@ const IMPORT_COL_MAP = {
 /* history */
 let historyProductId = null;
 let historyRows = [];
+let _historySearchTimer = null;
 
 /* pagination */
 let currentPage      = 0;
@@ -1240,6 +1241,10 @@ function init() {
     renderAll();
     searchInput.focus();
   });
+  document.getElementById('history-filter-search').addEventListener('input', () => {
+    clearTimeout(_historySearchTimer);
+    _historySearchTimer = setTimeout(loadHistory, 400);
+  });
   document.getElementById('filter-category').addEventListener('change', async e => {
     pageCatFilter = e.target.value;
     await loadData(0);
@@ -1789,8 +1794,15 @@ async function loadHistory() {
   const tbody = document.getElementById('history-tbody');
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary)">Yükleniyor…</td></tr>';
   try {
+    const typeFilter = document.getElementById('history-filter-type').value;
+    const searchQ    = (document.getElementById('history-filter-search').value || '').trim();
     let q = sb.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(200);
     if (historyProductId) q = q.eq('product_id', historyProductId);
+    if (typeFilter)       q = q.eq('type', typeFilter);
+    if (searchQ) {
+      const safe = searchQ.replace(/[*%,()]/g, '');
+      if (safe) q = q.imatch('product_name', toTurkishSearchPattern(safe));
+    }
     const { data, error } = await q;
     if (error) throw error;
     historyRows = data || [];
@@ -1802,11 +1814,7 @@ async function loadHistory() {
 
 function renderHistory() {
   const tbody = document.getElementById('history-tbody');
-  const typeFilter = document.getElementById('history-filter-type').value;
-  const searchQ    = document.getElementById('history-filter-search').value.toLowerCase().trim();
-  let rows = historyRows;
-  if (typeFilter) rows = rows.filter(r => r.type === typeFilter);
-  if (searchQ)    rows = rows.filter(r => (r.product_name || '').toLowerCase().includes(searchQ));
+  const rows = historyRows;
   if (rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary)">Hareket kaydı bulunamadı</td></tr>';
     return;

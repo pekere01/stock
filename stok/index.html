@@ -828,8 +828,8 @@
       </button>
     </div>
     <div class="history-filters">
-      <input type="text" id="history-filter-search" placeholder="Ürün adı ara…" oninput="renderHistory()" style="flex:1;min-width:160px">
-      <select id="history-filter-type" onchange="renderHistory()">
+      <input type="text" id="history-filter-search" placeholder="Ürün adı ara…" style="flex:1;min-width:160px">
+      <select id="history-filter-type" onchange="loadHistory()">
         <option value="">Tüm İşlemler</option>
         <option value="create">Ürün Oluşturuldu</option>
         <option value="in">Stok Girişi</option>
