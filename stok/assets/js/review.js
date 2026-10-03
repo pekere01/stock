@@ -20,6 +20,19 @@ async function fetchReviewItems(kategori) {
   return data;
 }
 
+// stok_kod === products.barcode; ürün adını tek sorguyla eşleştirip item'lara ekler.
+async function attachProductNames(items) {
+  const codes = [...new Set(items.map(i => i.stok_kod).filter(Boolean))];
+  if (codes.length === 0) return items;
+  const { data, error } = await sb.from('products').select('barcode, name').in('barcode', codes);
+  if (error) {
+    console.error('Ürün adları eşlenemedi:', error);
+    return items;
+  }
+  const nameByBarcode = new Map(data.map(p => [p.barcode, p.name]));
+  return items.map(i => ({ ...i, product_name: nameByBarcode.get(i.stok_kod) || null }));
+}
+
 function daysSince(dateStr) {
   const diffMs = Date.now() - new Date(dateStr).getTime();
   return Math.floor(diffMs / (24 * 60 * 60 * 1000));
@@ -31,7 +44,7 @@ function renderReviewRows(items, tbodyId, isSct = false) {
   if (items.length === 0) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.textContent = 'İnceleme bekleyen kayıt yok.';
     tr.appendChild(td);
     tbody.appendChild(tr);
@@ -40,6 +53,8 @@ function renderReviewRows(items, tbodyId, isSct = false) {
   const fragment = document.createDocumentFragment();
   items.forEach(item => {
     const tr = document.createElement('tr');
+    const tdName = document.createElement('td');
+    tdName.textContent = item.product_name || '—';
     const tdStok = document.createElement('td');
     tdStok.textContent = item.stok_kod;
     const tdIrsaliye = document.createElement('td');
@@ -73,7 +88,7 @@ function renderReviewRows(items, tbodyId, isSct = false) {
       btnDelete.onclick = () => window.deleteReviewItemProduct(item.mikro_sth_guid, item.stok_kod);
       tdIslem.appendChild(btnDelete);
     }
-    tr.append(tdStok, tdIrsaliye, tdMiktar, tdGun, tdIslem);
+    tr.append(tdName, tdStok, tdIrsaliye, tdMiktar, tdGun, tdIslem);
     fragment.appendChild(tr);
   });
   tbody.appendChild(fragment);
@@ -135,10 +150,14 @@ export async function clearInTestFlag(id) {
 }
 
 export async function loadReviewPanel() {
-  const [sct, diger, inTest] = await Promise.all([
+  const [sctRaw, digerRaw, inTest] = await Promise.all([
     fetchReviewItems('sct'),
     fetchReviewItems('diger'),
     fetchInTestProducts(),
+  ]);
+  const [sct, diger] = await Promise.all([
+    attachProductNames(sctRaw),
+    attachProductNames(digerRaw),
   ]);
   renderReviewRows(sct, 'review-table-sct-body', true);
   renderReviewRows(diger, 'review-table-diger-body');
