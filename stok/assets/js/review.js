@@ -343,7 +343,7 @@ export function deleteReviewItemProduct(guid, stokKod) {
         return;
       }
     }
-    const { data, error } = await sb.rpc('dismiss_review', { p_guid: guid });
+    const { data, error } = await sb.rpc('permanently_dismiss_review', { p_guid: guid });
     if (error || data?.error) {
       toast('Hata: ' + (data?.error || friendlyError(error)), 'error');
       return;
