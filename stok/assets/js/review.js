@@ -20,17 +20,17 @@ async function fetchReviewItems(kategori) {
   return data;
 }
 
-// stok_kod === products.barcode; ürün adını tek sorguyla eşleştirip item'lara ekler.
+// Önce Mikro'nun kendi STOKLAR adı (mikro_urun_adi), yoksa stok_kod === products.barcode eşleşmesi.
 async function attachProductNames(items) {
   const codes = [...new Set(items.map(i => i.stok_kod).filter(Boolean))];
   if (codes.length === 0) return items;
   const { data, error } = await sb.from('products').select('barcode, name').in('barcode', codes);
   if (error) {
     console.error('Ürün adları eşlenemedi:', error);
-    return items;
+    return items.map(i => ({ ...i, product_name: i.mikro_urun_adi || null }));
   }
   const nameByBarcode = new Map(data.map(p => [p.barcode, p.name]));
-  return items.map(i => ({ ...i, product_name: nameByBarcode.get(i.stok_kod) || null }));
+  return items.map(i => ({ ...i, product_name: i.mikro_urun_adi || nameByBarcode.get(i.stok_kod) || null }));
 }
 
 function daysSince(dateStr) {
