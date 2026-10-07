@@ -85,7 +85,7 @@ function renderReviewRows(items, tbodyId, isSct = false) {
       const btnDelete = document.createElement('button');
       btnDelete.className = 'btn btn-danger';
       btnDelete.textContent = 'Sil';
-      btnDelete.onclick = () => window.deleteReviewItemProduct(item.mikro_sth_guid, item.stok_kod);
+      btnDelete.onclick = () => window.closeReviewItem(item.mikro_sth_guid, item.stok_kod);
       tdIslem.appendChild(btnDelete);
     }
     tr.append(tdName, tdStok, tdIrsaliye, tdMiktar, tdGun, tdIslem);
@@ -333,16 +333,9 @@ export async function dismissReviewItem(guid) {
   await loadReviewPanel();
 }
 
-export function deleteReviewItemProduct(guid, stokKod) {
+export function closeReviewItem(guid, stokKod) {
   if (!canDeleteProducts()) { toast('Bu işlem için yetkiniz yok', 'error'); return; }
-  showConfirm(`"${stokKod || 'Bu kayıt'}" silinecek`, 'Ürün (varsa) kalıcı olarak silinecek ve bu inceleme kaydı kapatılacak. Bu işlem geri alınamaz.', async () => {
-    if (stokKod) {
-      const { error: delErr } = await sb.from('products').delete().eq('barcode', stokKod);
-      if (delErr) {
-        toast('Silme hatası: ' + friendlyError(delErr), 'error');
-        return;
-      }
-    }
+  showConfirm(`"${stokKod || 'Bu kayıt'}" silinecek`, 'Bu inceleme kaydı kalıcı olarak kapatılacak. Ürüne dokunulmaz. Bu işlem geri alınamaz.', async () => {
     const { data, error } = await sb.rpc('permanently_dismiss_review', { p_guid: guid });
     if (error || data?.error) {
       toast('Hata: ' + (data?.error || friendlyError(error)), 'error');
@@ -358,7 +351,7 @@ window.closeReviewPanel = closeReviewPanel;
 window.closeReviewOnOverlay = closeReviewOnOverlay;
 window.reverseReviewItem = reverseReviewItem;
 window.dismissReviewItem = dismissReviewItem;
-window.deleteReviewItemProduct = deleteReviewItemProduct;
+window.closeReviewItem = closeReviewItem;
 window.clearInTestFlag = clearInTestFlag;
 window.konsinyeFromReview = konsinyeFromReview;
 window.openKonsinyePanel = openKonsinyePanel;
