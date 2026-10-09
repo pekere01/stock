@@ -143,12 +143,20 @@ function toTurkishSearchPattern(str) {
   return parts.join('\\s*');
 }
 
-// warehouse_info virgülle ayrılmış çoklu depo içerebilir ("A, B") — depo
-// filtresi bu yüzden tam token eşleşmesi arar, substring değil (ör. "A"
-// seçildiğinde "AB" deposundaki ürün gelmemeli).
-function depoExactPattern(name) {
-  const esc = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return `(^|,\\s*)${esc}(\\s*,|$)`;
+// Depo kodları "A1/01", "B10/02" gibi harf+rakam formatında — filtre
+// dropdown'u teker teker ~330 kodu değil, baş harf gruplarını (A, B, C...)
+// gösterir. Rakamsız depo adları (ör. "OFİS") olduğu gibi kendi grubunu oluşturur.
+function extractDepoGroup(depo) {
+  const m = (depo || '').trim().match(/^\D+/);
+  return m ? m[0] : depo.trim();
+}
+
+// warehouse_info virgülle ayrılmış çoklu depo içerebilir ("A1/01, B6/09") —
+// seçilen grup, bir token'ın baş harf grubuyla eşleşir (token rakamla devam
+// ediyorsa) ya da token'ın tamamıdır (rakamsız depo adı, ör. "OFİS").
+function depoGroupPattern(group) {
+  const esc = group.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `(^|,\\s*)${esc}([0-9]|\\s*,|$)`;
 }
 
 export async function loadData(page = 0, recount = true) {
@@ -171,7 +179,7 @@ export async function loadData(page = 0, recount = true) {
       q = q.or(`name.imatch.${pattern},barcode.imatch.${pattern}`);
     }
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
-    if (pageDepoFilter)    q = q.filter('warehouse_info', 'imatch', depoExactPattern(pageDepoFilter));
+    if (pageDepoFilter)    q = q.filter('warehouse_info', 'imatch', depoGroupPattern(pageDepoFilter));
     // Metin araması varken Durum filtresi görmezden gelinir — kullanıcı bir ürün adı/barkod
     // yazdığında "Stokta Olanlar" gibi varsayılan bir filtre yüzünden tükenmiş/pasif ürünler
     // sessizce dışlanmasın (2026-09-02, "T490 LNMT 1306PNTR IC808" bulunamadı bug'ı).
@@ -549,9 +557,10 @@ export function populateFilters() {
   const fd = document.getElementById('filter-depo');
   if (fd) {
     const currentFd = fd.value;
+    const depoGroups = [...new Set(depoList.map(extractDepoGroup))].sort((a, b) => a.localeCompare(b, 'tr'));
     fd.innerHTML = '<option value="">Tüm Depolar</option>' +
-      depoList.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
-    if (currentFd && depoList.includes(currentFd)) fd.value = currentFd;
+      depoGroups.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+    if (currentFd && depoGroups.includes(currentFd)) fd.value = currentFd;
     else if (currentFd) { pageDepoFilter = ''; } // seçili depo listeden düştü (ör. yeniden adlandırıldı)
   }
 }
