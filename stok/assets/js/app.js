@@ -171,9 +171,13 @@ export async function loadData(page = 0, recount = true) {
     const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter || pageDepoFilter);
     const wantsDepoList = isAdmin() || currentPermissions?.admin === true;
     let q = sb.from('products')
-      .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' })
-      .order('category', { ascending: true })
-      .order('name', { ascending: true });
+      .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' });
+    // Depo filtresi aktifken ürünler depo kodu sırasına göre dizilir (B7/01, B7/02...) —
+    // kategori/isim sıralaması depo filtresinin amacını (bir depodaki ürünleri sırayla
+    // görmek) bozardı.
+    q = pageDepoFilter
+      ? q.order('warehouse_info', { ascending: true }).order('name', { ascending: true })
+      : q.order('category', { ascending: true }).order('name', { ascending: true });
     if (safe) {
       const pattern = toTurkishSearchPattern(safe);
       q = q.or(`name.imatch.${pattern},barcode.imatch.${pattern}`);
