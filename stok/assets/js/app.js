@@ -62,6 +62,8 @@ let totalCount       = 0;
 let pageSearch       = '';
 let pageCatFilter    = '';
 let pageStatusFilter = 'active';
+let pageDepoFilter   = '';
+let depoList         = [];
 let _searchTimer     = null;
 
 /* ===== REALTIME ===== */
@@ -76,6 +78,7 @@ function setupRealtime() {
       clearTimeout(_realtimeTimer);
       _realtimeTimer = setTimeout(async () => {
         await loadData(currentPage, false);
+        populateFilters();
         renderAll();
       }, 500);
     })
@@ -140,6 +143,14 @@ function toTurkishSearchPattern(str) {
   return parts.join('\\s*');
 }
 
+// warehouse_info virgülle ayrılmış çoklu depo içerebilir ("A, B") — depo
+// filtresi bu yüzden tam token eşleşmesi arar, substring değil (ör. "A"
+// seçildiğinde "AB" deposundaki ürün gelmemeli).
+function depoExactPattern(name) {
+  const esc = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `(^|,\\s*)${esc}(\\s*,|$)`;
+}
+
 export async function loadData(page = 0, recount = true) {
   if (!currentUser) return;
   setupRealtime();
@@ -149,7 +160,8 @@ export async function loadData(page = 0, recount = true) {
   try {
     const safe          = (pageSearch || '').replace(/[*%,()]/g, '');
     const hasTextSearch = !!safe;
-    const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter);
+    const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter || pageDepoFilter);
+    const wantsDepoList = isAdmin() || currentPermissions?.admin === true;
     let q = sb.from('products')
       .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' })
       .order('category', { ascending: true })
@@ -159,6 +171,7 @@ export async function loadData(page = 0, recount = true) {
       q = q.or(`name.imatch.${pattern},barcode.imatch.${pattern}`);
     }
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
+    if (pageDepoFilter)    q = q.filter('warehouse_info', 'imatch', depoExactPattern(pageDepoFilter));
     // Metin araması varken Durum filtresi görmezden gelinir — kullanıcı bir ürün adı/barkod
     // yazdığında "Stokta Olanlar" gibi varsayılan bir filtre yüzünden tükenmiş/pasif ürünler
     // sessizce dışlanmasın (2026-09-02, "T490 LNMT 1306PNTR IC808" bulunamadı bug'ı).
@@ -168,10 +181,11 @@ export async function loadData(page = 0, recount = true) {
     }
     q = q.range(from, to);
 
-    const [catsRes, prodsRes, rpcRes] = await Promise.all([
+    const [catsRes, prodsRes, rpcRes, depoRes] = await Promise.all([
       sb.from('categories').select('*').order('name', { ascending: true }).range(0, 1999),
       q,
-      sb.rpc('get_dashboard_summary')
+      sb.rpc('get_dashboard_summary'),
+      wantsDepoList ? sb.rpc('get_depo_list') : Promise.resolve({ data: null, error: null })
     ]);
     if (catsRes.error) throw catsRes.error;
     if (prodsRes.error) throw prodsRes.error;
@@ -182,6 +196,8 @@ export async function loadData(page = 0, recount = true) {
       dashboardSummary = rpcRes.data;
       if (!hasFilter) totalCount = rpcRes.data.total_products ?? totalCount;
     }
+    if (wantsDepoList && !depoRes.error) depoList = (depoRes.data || []).map(r => r.depo);
+    else if (!wantsDepoList) depoList = [];
   } catch (err) {
     console.error('Veri yükleme hatası:', err.message || err);
     toast('Veriler yüklenemedi: ' + friendlyError(err), 'error');
@@ -528,6 +544,15 @@ export function populateFilters() {
     ec.innerHTML = '<option value="">Tüm Kategoriler</option>' +
       categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
     if (currentEc && categories.some(c => c.name === currentEc)) ec.value = currentEc;
+  }
+
+  const fd = document.getElementById('filter-depo');
+  if (fd) {
+    const currentFd = fd.value;
+    fd.innerHTML = '<option value="">Tüm Depolar</option>' +
+      depoList.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+    if (currentFd && depoList.includes(currentFd)) fd.value = currentFd;
+    else if (currentFd) { pageDepoFilter = ''; } // seçili depo listeden düştü (ör. yeniden adlandırıldı)
   }
 }
 
@@ -1252,6 +1277,11 @@ function init() {
   });
   document.getElementById('filter-status').addEventListener('change', async e => {
     pageStatusFilter = e.target.value;
+    await loadData(0);
+    renderAll();
+  });
+  document.getElementById('filter-depo').addEventListener('change', async e => {
+    pageDepoFilter = e.target.value;
     await loadData(0);
     renderAll();
   });

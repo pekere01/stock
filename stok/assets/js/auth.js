@@ -90,9 +90,12 @@ function applyPermissions() {
   const reviewBtn       = document.getElementById('review-panel-btn');
   const konsinyeBtn     = document.getElementById('konsinye-panel-btn');
   const exportBtn       = document.getElementById('export-btn');
+  const depoFilter      = document.getElementById('filter-depo');
   const canMoveStock    = canDo('add_products') || canDo('make_sales');
+  const isAdminUser     = isAdmin() || currentPermissions?.admin === true;
 
-  if (adminBtn)        adminBtn.style.display        = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
+  if (adminBtn)        adminBtn.style.display        = isAdminUser ? '' : 'none';
+  if (depoFilter)      depoFilter.style.display       = isAdminUser ? '' : 'none';
   if (addBtn)          addBtn.style.display          = canDo('add_products') ? '' : 'none';
   if (categoryBtn)     categoryBtn.style.display     = canDo('manage_categories') ? '' : 'none';
   if (importBtn)       importBtn.style.display       = canDo('add_products') ? '' : 'none';
