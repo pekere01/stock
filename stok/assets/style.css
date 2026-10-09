@@ -791,7 +791,6 @@
     white-space: nowrap;
   }
   tbody td.center { text-align: center; }
-  #products-table th:first-child, #products-table td:first-child { width: 100%; }
   tbody td strong, .stock-num, .margin-good, .margin-mid, .margin-bad {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
