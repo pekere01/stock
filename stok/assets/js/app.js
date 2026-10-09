@@ -501,7 +501,7 @@ function renderTable() {
           <div class="product-barcode">${escapeHtml(p.barcode)}</div>
         </td>
         <td><span class="badge" style="border-color:${getCategoryColor(p.category)}40;color:${getCategoryColor(p.category)}">${escapeHtml(p.category)}</span></td>
-        <td><span style="font-size:12px;font-weight:500;color:var(--text-secondary)">${escapeHtml(p.depo || '—')}</span></td>
+        <td><span class="depo-cell"${p.depo ? ` title="${escapeHtml(p.depo)}"` : ''}>${escapeHtml(p.depo || '—')}</span></td>
         <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<strong>${fmtEUR(p.price)}</strong>`}</td>
         <td style="color:var(--text-secondary)">${viewOnly ? '—' : fmtEUR(p.cost)}</td>
         <td>${viewOnly ? '<span style="color:var(--text-secondary)">—</span>' : `<span class="${marginCls}">${(margin / 100).toFixed(2)}</span>`}</td>
