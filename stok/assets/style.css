@@ -823,10 +823,10 @@
   }
   .depo-cell {
     display: inline-block;
-    max-width: 104px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 140px;
+    white-space: normal;
+    overflow-wrap: break-word;
+    line-height: 1.4;
     vertical-align: middle;
     font-size: 12px;
     font-weight: 500;
