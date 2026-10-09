@@ -172,11 +172,12 @@ export async function loadData(page = 0, recount = true) {
     const wantsDepoList = isAdmin() || currentPermissions?.admin === true;
     let q = sb.from('products')
       .select('*', (recount && hasFilter) ? { count: 'exact' } : { count: 'none' });
-    // Depo filtresi aktifken ürünler depo kodu sırasına göre dizilir (B7/01, B7/02...) —
-    // kategori/isim sıralaması depo filtresinin amacını (bir depodaki ürünleri sırayla
-    // görmek) bozardı.
+    // Depo filtresi aktifken ürünler depo koduna göre dizilir (B01, B02...B10, B11...) —
+    // warehouse_info'nun düz string sıralaması "B10" < "B5" gibi yanlış sonuç verir
+    // (karakter karşılaştırması), bu yüzden gerçek sayısal sıra için generated column
+    // warehouse_sort_key kullanılır (bkz. natural_sort_key() RPC, migration 20261009b).
     q = pageDepoFilter
-      ? q.order('warehouse_info', { ascending: true }).order('name', { ascending: true })
+      ? q.order('warehouse_sort_key', { ascending: true }).order('name', { ascending: true })
       : q.order('category', { ascending: true }).order('name', { ascending: true });
     if (safe) {
       const pattern = toTurkishSearchPattern(safe);
