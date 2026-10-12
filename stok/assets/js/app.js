@@ -646,7 +646,7 @@ export function openEditModal(id) {
   document.getElementById('form-error').textContent = '';
   document.getElementById('price-field-wrapper').style.display = '';
   const stockField = document.getElementById('f-stock').closest('.form-field');
-  if (stockField) stockField.style.display = (isAdmin() || currentPermissions?.admin) ? '' : 'none';
+  if (stockField) stockField.style.display = canDo('add_products') ? '' : 'none';
   document.getElementById('product-modal').classList.add('visible');
   lockBodyScroll();
 }
