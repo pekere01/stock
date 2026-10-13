@@ -69,7 +69,7 @@ const canMoveStock = can('add_products') || can('make_sales');
 
 const expected = {
   addProductBtn:   can('add_products'),
-  invoiceDropdown: can('make_sales'),
+  invoiceDropdown: false, // Fatura Yükle menüsü 2026-10-13'te kaldırıldı (otomasyon yapıyor)
   categoryItem:    can('manage_categories'),
   importItem:      can('add_products'),
   adminBtn:        can('admin'),
