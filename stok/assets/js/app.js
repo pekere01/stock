@@ -24,16 +24,6 @@ let editingCategoryName = null;
 let eurRate = parseFloat(localStorage.getItem(EUR_RATE_KEY)) || 34.00;
 let dashboardSummary = null;
 
-// Aynı ürün birden fazla depoda/çekmecede bulunabilir — yeni depo bilgisi
-// mevcut olanı SİLMEZ, virgülle ayrılmış listeye eklenir (zaten varsa tekrar eklenmez).
-function mergeDepo(existingDepo, incomingDepo) {
-  const incoming = (incomingDepo || '').trim();
-  if (!incoming) return existingDepo || null;
-  const parts = (existingDepo || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (parts.some(p => p.toLowerCase() === incoming.toLowerCase())) return parts.join(', ');
-  return [...parts, incoming].join(', ');
-}
-
 /* import */
 let importRows = [];
 let importExistingMap = new Map();
@@ -661,6 +651,20 @@ export function openEditModal(id) {
 export function closeProductModal() { document.getElementById('product-modal').classList.remove('visible'); unlockBodyScroll(); }
 export function closeProductModalOnOverlay(e) { if (e.target.id === 'product-modal') closeProductModal(); }
 
+// Sunucuda atomik stok artırma (`add_stock` RPC): satır kilitlenir, stock = stock + qty, hareket kaydı aynı işlemde yazılır.
+async function addStockRpc(productId, qty, { cost = null, price = null, depo = null, purchaseRate = null, type = 'in', notes = null } = {}) {
+  const { data, error } = await sb.rpc('add_stock', {
+    p_product_id: productId, p_qty: qty, p_cost: cost, p_price: price,
+    p_depo: depo || null, p_purchase_rate: purchaseRate, p_type: type, p_notes: notes
+  });
+  if (error) throw error;
+  if (data?.error) {
+    const msg = { yetkiniz_yok: 'Bu işlem için yetkiniz yok', urun_bulunamadi: 'Ürün bulunamadı', gecersiz_parametre: 'Geçersiz değer' };
+    throw new Error(msg[data.error] || data.error);
+  }
+  return data;
+}
+
 export async function submitProductForm(e) {
   e.preventDefault();
   const name     = document.getElementById('f-name').value.trim();
@@ -694,14 +698,9 @@ export async function submitProductForm(e) {
     }
 
     if (dup && !editingId) {
-      const newStock  = dup.stock + stock;
-      const newStatus = calcStatus({ ...dup, stock: newStock });
-      const upd = { stock: newStock, status: newStatus, purchase_rate: eurRate };
-      if (cost > 0) upd.cost_price     = cost;
-      if (depo)     upd.warehouse_info = mergeDepo(dup.depo, depo);
-      const { error } = await sb.from('products').update(upd).eq('id', dup.id);
-      if (error) throw error;
-      logMovement({ productId: dup.id, productName: dup.name, type: 'in', quantity: stock, oldStock: newStock - stock, newStock, notes: 'Eşleşme ile stok artışı' });
+      // Stok sunucuda atomik artırılır (eski ekran değerinden hesaplanırsa arada olan satış ezilirdi);
+      // hareket kaydını da RPC yazar.
+      await addStockRpc(dup.id, stock, { cost: cost > 0 ? cost : null, depo, purchaseRate: eurRate, type: 'in', notes: 'Eşleşme ile stok artışı' });
       closeProductModal();
       await loadData(currentPage); renderAll();
       toast(`"${dup.name}" — stok ${stock} adet artırıldı (${dupReason} eşleşti)`);
@@ -1606,21 +1605,16 @@ async function executeImport() {
       try {
         const existing = _findExisting(row);
         if (existing) {
-          const oldExStock = existing.stock;
-          const newStock  = existing.stock + row.stock;
-          const newStatus = calcStatus({ ...existing, stock: newStock });
-          const upd = { stock: newStock, status: newStatus };
-          if (row.cost > 0)  upd.cost_price     = row.cost;
-          if (row.price > 0) upd.sale_price      = row.price;
-          if (row.depo)      upd.warehouse_info  = mergeDepo(existing.depo, row.depo);
-          const { error } = await sb.from('products').update(upd).eq('id', existing.id);
-          if (error) throw error;
-          existing.stock = newStock; existing.status = newStatus;
-          if (row.cost > 0)  existing.cost  = row.cost;
-          if (row.price > 0) existing.price = row.price;
-          if (row.depo)      existing.depo  = upd.warehouse_info;
+          // Önizlemedeki stok değeri otorite değil: sunucu güncel stoka `+ row.stock` ekler ve hareketi yazar.
+          const r = await addStockRpc(existing.id, row.stock, {
+            cost: row.cost > 0 ? row.cost : null, price: row.price > 0 ? row.price : null,
+            depo: row.depo, type: 'import'
+          });
+          existing.stock = r.new_stock; existing.status = r.status;
+          existing.cost  = Number(r.cost_price) || 0;
+          existing.price = Number(r.sale_price) || 0;
+          existing.depo  = r.warehouse_info || '';
           updateCount++;
-          logMovement({ productId: existing.id, productName: existing.name, type: 'import', quantity: row.stock, oldStock: oldExStock, newStock });
         } else {
           const key = (row.barcode || '').toLowerCase() || row.name.toLowerCase();
           if (seenKeys.has(key)) {
