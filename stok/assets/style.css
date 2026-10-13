@@ -1570,11 +1570,10 @@
   /* Users table */
   .admin-table-wrap {
     position: relative;
-    background: var(--glass-bg);
+    /* backdrop-filter kaldırıldı: üstteki sekmelerin üzerine gelince tabloda dikey açık bant (çizim kusuru) çıkıyordu */
+    background: rgba(14,14,22,0.82);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
     overflow: hidden;
   }
   @media (max-width: 768px) {
