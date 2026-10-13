@@ -780,23 +780,28 @@ export async function submitStockOut(e) {
   const submitBtn = e.target.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.disabled = true;
   try {
-    const newStock   = p.stock - qty;
-    const newSales7d = (p.sales7d || 0) + qty;
-    const newStatus  = calcStatus({ ...p, stock: newStock });
-    const upd = { stock: newStock, sales7d: newSales7d, status: newStatus };
-    if (salePrice > 0) { upd.sale_price = salePrice; upd.sale_rate = saleRate; }
-    const { error } = await sb.from('products').update(upd).eq('id', p.id);
+    // Satış sunucuda sell_stock RPC'siyle yapılır (make_sales yetkisi + stok + hareket kaydı tek işlemde).
+    const { data, error } = await sb.rpc('sell_stock', {
+      p_product_id: p.id,
+      p_qty:        qty,
+      p_sale_price: salePrice > 0 ? salePrice : null,
+      p_sale_rate:  salePrice > 0 ? saleRate : null,
+    });
     if (error) throw error;
-    const prevStock = p.stock;
+    if (data?.error) {
+      if (data.error === 'yetkiniz_yok')  throw new Error('Bu işlem için yetkiniz yok');
+      if (data.error === 'yetersiz_stok') throw new Error(`En fazla ${data.stock} adet çıkarabilirsiniz.`);
+      throw new Error(data.error);
+    }
+    const newStock   = data.new_stock;
+    const newSales7d = data.sales7d;
+    const newStatus  = calcStatus({ ...p, stock: newStock });
+    const prevStock  = data.old_stock;
     p.stock = newStock; p.sales7d = newSales7d; p.status = newStatus;
     if (salePrice > 0) { p.price = salePrice; p.saleRate = saleRate; }
     if (prevStock > (p.minStock || 0) && newStock <= (p.minStock || 0)) {
       triggerLowStockAlert(p);
     }
-    const noteStr = salePrice > 0
-      ? `Satış fiyatı: ${fmtEUR(salePrice)}`
-      : '';
-    logMovement({ productId: p.id, productName: p.name, type: 'sale', quantity: qty, oldStock: prevStock, newStock, newPrice: salePrice, notes: noteStr });
     closeStockOutModal(); renderAll();
     toast(`${qty} adet stoktan düşüldü`);
   } catch (err) {
