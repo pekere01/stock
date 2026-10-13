@@ -6,7 +6,14 @@ async function adminInvoke(action, payload = {}) {
   const { data, error } = await sb.functions.invoke('admin-operations', {
     body: { action, ...payload }
   });
-  if (error) throw error;
+  if (error) {
+    // Başka bir cihaz/tarayıcıda çıkış yapılınca bu oturum sunucuda silinir ama sekme girişli görünür.
+    if (error.context?.status === 401) {
+      await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+      throw new Error('Oturumunuz sona erdi, lütfen tekrar giriş yapın.');
+    }
+    throw error;
+  }
   if (data?.error) throw new Error(data.error);
   return data;
 }

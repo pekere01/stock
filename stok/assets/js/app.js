@@ -204,6 +204,14 @@ export async function loadData(page = 0, recount = true) {
     if (prodsRes.error) throw prodsRes.error;
     categories = (catsRes.data || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
     products   = (prodsRes.data || []).map(dbToProduct);
+    // "7G Satış": eski products.sales7d sayacı yerine son 7 günün gerçek satış hareketleri (Mikro dahil).
+    if (products.length) {
+      const salesRes = await sb.rpc('get_sales_7d', { p_ids: products.map(p => p.id) });
+      if (!salesRes.error) {
+        const bySale = new Map((salesRes.data || []).map(r => [Number(r.product_id), Number(r.qty)]));
+        products.forEach(p => { p.sales7d = bySale.get(Number(p.id)) || 0; });
+      }
+    }
     if (recount && hasFilter) totalCount = prodsRes.count ?? totalCount;
     if (!rpcRes.error && rpcRes.data) {
       dashboardSummary = rpcRes.data;
@@ -794,7 +802,7 @@ export async function submitStockOut(e) {
       throw new Error(data.error);
     }
     const newStock   = data.new_stock;
-    const newSales7d = data.sales7d;
+    const newSales7d = (Number(p.sales7d) || 0) + qty;
     const newStatus  = calcStatus({ ...p, stock: newStock });
     const prevStock  = data.old_stock;
     p.stock = newStock; p.sales7d = newSales7d; p.status = newStatus;

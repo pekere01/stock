@@ -160,7 +160,8 @@ export async function handleAuthSubmit(e) {
 }
 
 export async function handleLogout() {
-  await sb.auth.signOut();
+  // 'local': yalnızca bu cihazın oturumunu kapatır; başka cihazdaki/tarayıcıdaki oturumlar silinmez.
+  await sb.auth.signOut({ scope: 'local' });
   currentUser = null;
   exitApp();
   document.getElementById('auth-form').reset();
