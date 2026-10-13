@@ -161,39 +161,38 @@ Deno.serve(async (req) => {
     const subject = `[Sonçağ Stok Uyarı] ${productName.replace(/[\r\n]/g, " ")} Stok Seviyesi Kritik!`;
     const stockRatio = minStock > 0 ? Math.round((stock / minStock) * 100) : 0;
 
+    const cell = "padding:16px 8px;text-align:center;border:1px solid #e5e7eb;";
+    const lbl = "font-size:11px;color:#6b7280;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;";
     const htmlBody = `<!DOCTYPE html>
 <html lang="tr">
-<body style="font-family:'Segoe UI',Arial,sans-serif;background:#f4f4f4;padding:24px;margin:0;">
-  <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1);">
-    <div style="background:#ef4444;padding:24px 28px;">
-      <div style="color:rgba(255,255,255,0.8);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">&#9888; Kritik Stok Uyarısı</div>
-      <div style="color:white;font-size:22px;font-weight:700;line-height:1.3;">${escapeHtml(productName)}</div>
-      ${productBarcode ? `<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:5px;font-family:monospace;">${escapeHtml(productBarcode)}</div>` : ""}
+<body style="margin:0;padding:24px 12px;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;color:#111827;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:28px 28px 8px;">
+      <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:600;">Kritik stok uyarısı</span>
+      <div style="margin-top:14px;font-size:21px;font-weight:700;line-height:1.35;color:#111827;">${escapeHtml(productName)}</div>
+      ${productBarcode ? `<div style="margin-top:6px;font-size:13px;color:#6b7280;font-family:Consolas,monospace;">${escapeHtml(productBarcode)}</div>` : ""}
     </div>
-    <div style="padding:28px;">
-      <table style="width:100%;border-collapse:collapse;">
+    <div style="padding:16px 28px 8px;">
+      <table role="presentation" style="width:100%;border-collapse:collapse;">
         <tr>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Mevcut Stok</td>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;font-size:18px;color:#ef4444;">${escapeHtml(stock)} adet</td>
-        </tr>
-        <tr>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Min. Stok Eşiği</td>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:600;font-size:14px;color:#374151;">${escapeHtml(minStock)} adet</td>
-        </tr>
-        ${depo ? `<tr>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Depo</td>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:500;font-size:13px;color:#374151;">${escapeHtml(depo)}</td>
-        </tr>` : ""}
-        <tr>
-          <td style="padding:11px 0;color:#6b7280;font-size:13px;">Doluluk Oranı</td>
-          <td style="padding:11px 0;text-align:right;font-weight:700;font-size:14px;color:#f59e0b;">${escapeHtml(stockRatio)}%</td>
+          <td style="${cell}border-radius:10px 0 0 10px;width:34%;">
+            <div style="${lbl}">Mevcut stok</div>
+            <div style="font-size:26px;font-weight:700;color:#dc2626;">${escapeHtml(stock)}</div>
+          </td>
+          <td style="${cell}width:33%;">
+            <div style="${lbl}">Min. eşik</div>
+            <div style="font-size:26px;font-weight:700;color:#374151;">${escapeHtml(minStock)}</div>
+          </td>
+          <td style="${cell}border-radius:0 10px 10px 0;width:33%;">
+            <div style="${lbl}">Doluluk</div>
+            <div style="font-size:26px;font-weight:700;color:#d97706;">%${escapeHtml(stockRatio)}</div>
+          </td>
         </tr>
       </table>
-      <div style="margin-top:20px;padding:14px 16px;background:#fef2f2;border-radius:8px;border-left:3px solid #ef4444;">
-        <div style="font-size:13px;color:#7f1d1d;line-height:1.6;">
-          Stok seviyesi kritik eşiğe düştü. Lütfen sistemi kontrol ederek gerekli sipariş işlemini başlatın.
-        </div>
-      </div>
+      ${depo ? `<div style="margin-top:14px;font-size:13px;color:#4b5563;"><span style="color:#6b7280;">Depo:</span> <strong style="color:#111827;">${escapeHtml(depo)}</strong></div>` : ""}
+      <p style="margin:18px 0 12px;font-size:14px;line-height:1.6;color:#374151;">
+        Stok seviyesi kritik eşiğe düştü. Lütfen sistemi kontrol ederek gerekli sipariş işlemini başlatın.
+      </p>
     </div>
     <div style="padding:14px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center;">
       Sonçağ Stok Yönetim Sistemi &middot; Bu mesaj otomatik olarak gönderilmiştir.
