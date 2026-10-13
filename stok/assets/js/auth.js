@@ -86,7 +86,6 @@ function applyPermissions() {
   const addBtn          = document.getElementById('add-product-btn');
   const categoryBtn     = document.getElementById('category-btn');
   const importBtn       = document.getElementById('import-btn');
-  const invoiceDropdown = document.getElementById('dropdown-invoice');
   const reviewBtn       = document.getElementById('review-panel-btn');
   const konsinyeBtn     = document.getElementById('konsinye-panel-btn');
   const exportBtn       = document.getElementById('export-btn');
@@ -99,7 +98,6 @@ function applyPermissions() {
   if (addBtn)          addBtn.style.display          = canDo('add_products') ? '' : 'none';
   if (categoryBtn)     categoryBtn.style.display     = canDo('manage_categories') ? '' : 'none';
   if (importBtn)       importBtn.style.display       = canDo('add_products') ? '' : 'none';
-  if (invoiceDropdown) invoiceDropdown.style.display = canDo('make_sales') ? '' : 'none';
   if (reviewBtn)       reviewBtn.style.display        = canMoveStock ? '' : 'none';
   if (konsinyeBtn)     konsinyeBtn.style.display      = canMoveStock ? '' : 'none';
   // Export, tabloda maskelenen fiyat/maliyet/kar kolonlarini CSV'ye yaziyor —
