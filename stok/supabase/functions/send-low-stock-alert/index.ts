@@ -24,62 +24,123 @@ function escapeHtml(s: unknown): string {
   );
 }
 
+const SUPER_ADMIN_EMAIL = "teknik@soncag.com";
+// Aynı ürün için en fazla bu kadar sıklıkta e-posta gider.
+const COOLDOWN_MINUTES = 60;
+// Uyarı, çağıranın bu ürüne yaptığı gerçek bir satışa bağlı olmalı.
+const RECENT_SALE_MINUTES = 15;
+
 // Legacy anon/service_role JWT yerine yeni sb_publishable_/sb_secret_ key sistemi
 const PUBLISHABLE_KEY = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}")["default"] ?? "";
 const SECRET_KEY = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}")["default"] ?? "";
 
 Deno.serve(async (req) => {
   const corsHeaders = corsHeadersFor(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   // Frontend bu fonksiyonu girişli kullanıcının kendi session token'ıyla çağırıyor
-  // (bkz. app.js triggerLowStockAlert) — service_role key ile değil. Token'ı Supabase
-  // Auth üzerinden doğrula (parse-invoice.js'deki kalıpla aynı).
+  // (bkz. app.js triggerLowStockAlert) — service_role key ile değil.
   const authHeader = req.headers.get("Authorization");
   const token = authHeader?.replace(/^Bearer\s+/i, "");
-  if (!token) {
-    return new Response(JSON.stringify({ error: "Yetkisiz erişim" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  if (!token) return json({ error: "Yetkisiz erişim" }, 401);
+
   const userRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/auth/v1/user`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: PUBLISHABLE_KEY,
-    },
+    headers: { Authorization: `Bearer ${token}`, apikey: PUBLISHABLE_KEY },
   });
-  if (!userRes.ok) {
-    return new Response(JSON.stringify({ error: "Geçersiz veya süresi dolmuş token" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  if (!userRes.ok) return json({ error: "Geçersiz veya süresi dolmuş token" }, 401);
+  const caller = await userRes.json() as { id?: string; email?: string };
+  if (!caller?.id) return json({ error: "Geçersiz veya süresi dolmuş token" }, 401);
 
   try {
-    const { productName, productBarcode, newStock, minStock, depo } =
-      await req.json();
+    // Service role client — user_permissions / products / stock_movements RLS'siz okunur
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, SECRET_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-    // Service role client — reads user_permissions without RLS restriction
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      SECRET_KEY
-    );
+    // 1) Yetki: yalnızca satış yetkisi olan (veya yönetici) bu uyarıyı tetikleyebilir.
+    let allowed = caller.email === SUPER_ADMIN_EMAIL;
+    if (!allowed) {
+      const { data: perm } = await supabase
+        .from("user_permissions")
+        .select("permissions")
+        .eq("user_id", caller.id)
+        .maybeSingle();
+      allowed = !!(perm?.permissions?.admin || perm?.permissions?.make_sales);
+    }
+    if (!allowed) return json({ error: "Bu işlem için yetkiniz yok" }, 403);
 
-    // Fetch recipients
+    // 2) Ürünü istemciden değil veritabanından oku. İstemciden yalnızca ürün kimliği (veya
+    //    eski önbellekli arayüzler için barkod) alınır; ad/stok/eşik/depo istemciye güvenilmez.
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    let query = supabase
+      .from("products")
+      .select("id, name, barcode, stock, min_stock, warehouse_info");
+    if (body.productId !== undefined && Number.isFinite(Number(body.productId))) {
+      query = query.eq("id", Number(body.productId));
+    } else if (typeof body.productBarcode === "string" && body.productBarcode.trim() !== "") {
+      query = query.eq("barcode", body.productBarcode.trim());
+    } else {
+      return json({ error: "Geçersiz istek" }, 400);
+    }
+    const { data: product, error: prodErr } = await query.maybeSingle();
+    if (prodErr) throw prodErr;
+    if (!product) return json({ error: "Ürün bulunamadı" }, 404);
+
+    const stock = Number(product.stock ?? 0);
+    const minStock = Number(product.min_stock ?? 0);
+
+    // 3) Gerçekten eşiğe düşmüş mü?
+    if (!(stock <= minStock)) return json({ sent: 0, reason: "esik_ustunde" });
+
+    // 4) Çağıranın bu ürüne yakın zamanda yaptığı gerçek bir satış var mı?
+    const saleSince = new Date(Date.now() - RECENT_SALE_MINUTES * 60_000).toISOString();
+    const { count: saleCount, error: saleErr } = await supabase
+      .from("stock_movements")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", product.id)
+      .eq("user_id", caller.id)
+      .eq("type", "sale")
+      .gte("created_at", saleSince);
+    if (saleErr) throw saleErr;
+    if (!saleCount) return json({ sent: 0, reason: "son_satis_yok" });
+
+    // 5) Bekleme süresi: aynı ürün için kısa süre içinde ikinci e-posta gitmez.
+    const coolSince = new Date(Date.now() - COOLDOWN_MINUTES * 60_000).toISOString();
+    const { count: recentCount, error: coolErr } = await supabase
+      .from("low_stock_alert_log")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", product.id)
+      .gte("sent_at", coolSince);
+    if (coolErr) throw coolErr;
+    if (recentCount) return json({ sent: 0, reason: "bekleme_suresi" });
+
+    // Alıcılar
     const { data: users, error: dbErr } = await supabase
       .from("user_permissions")
       .select("email")
       .eq("receives_email_alerts", true);
-
     if (dbErr) throw dbErr;
-    if (!users || users.length === 0) {
-      return new Response(JSON.stringify({ sent: 0, message: "No recipients" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!users || users.length === 0) return json({ sent: 0, message: "No recipients" });
+
+    // Çift gönderimi daraltmak için önce kaydı rezerve et; hiç gitmezse geri al.
+    const { data: logRow, error: logErr } = await supabase
+      .from("low_stock_alert_log")
+      .insert({ product_id: product.id, sent_by: caller.id })
+      .select("id")
+      .single();
+    if (logErr) throw logErr;
+
+    const productName = String(product.name ?? "");
+    const productBarcode = String(product.barcode ?? "");
+    const depo = String(product.warehouse_info ?? "");
 
     // Gmail SMTP transporter (port 587 STARTTLS)
     const transporter = nodemailer.createTransport({
@@ -93,9 +154,8 @@ Deno.serve(async (req) => {
       },
     });
 
-    const subject = `[Sonçağ Stok Uyarı] ${String(productName ?? "").replace(/[\r\n]/g, " ")} Stok Seviyesi Kritik!`;
-    const stockRatio =
-      minStock > 0 ? Math.round((newStock / minStock) * 100) : 0;
+    const subject = `[Sonçağ Stok Uyarı] ${productName.replace(/[\r\n]/g, " ")} Stok Seviyesi Kritik!`;
+    const stockRatio = minStock > 0 ? Math.round((stock / minStock) * 100) : 0;
 
     const htmlBody = `<!DOCTYPE html>
 <html lang="tr">
@@ -110,11 +170,11 @@ Deno.serve(async (req) => {
       <table style="width:100%;border-collapse:collapse;">
         <tr>
           <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Mevcut Stok</td>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;font-size:18px;color:#ef4444;">${newStock} adet</td>
+          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;font-size:18px;color:#ef4444;">${escapeHtml(stock)} adet</td>
         </tr>
         <tr>
           <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Min. Stok Eşiği</td>
-          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:600;font-size:14px;color:#374151;">${minStock} adet</td>
+          <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:600;font-size:14px;color:#374151;">${escapeHtml(minStock)} adet</td>
         </tr>
         ${depo ? `<tr>
           <td style="padding:11px 0;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Depo</td>
@@ -122,7 +182,7 @@ Deno.serve(async (req) => {
         </tr>` : ""}
         <tr>
           <td style="padding:11px 0;color:#6b7280;font-size:13px;">Doluluk Oranı</td>
-          <td style="padding:11px 0;text-align:right;font-weight:700;font-size:14px;color:#f59e0b;">${stockRatio}%</td>
+          <td style="padding:11px 0;text-align:right;font-weight:700;font-size:14px;color:#f59e0b;">${escapeHtml(stockRatio)}%</td>
         </tr>
       </table>
       <div style="margin-top:20px;padding:14px 16px;background:#fef2f2;border-radius:8px;border-left:3px solid #ef4444;">
@@ -140,26 +200,28 @@ Deno.serve(async (req) => {
 
     let sentCount = 0;
     for (const user of users) {
-      await transporter.sendMail({
-        from: `"Sonçağ Stok" <${Deno.env.get("SMTP_USER")}>`,
-        to: user.email,
-        subject,
-        html: htmlBody,
-      });
-      sentCount++;
+      try {
+        await transporter.sendMail({
+          from: `"Sonçağ Stok" <${Deno.env.get("SMTP_USER")}>`,
+          to: user.email,
+          subject,
+          html: htmlBody,
+        });
+        sentCount++;
+      } catch (mailErr) {
+        console.error("send-low-stock-alert mail error:", mailErr);
+      }
     }
 
-    return new Response(JSON.stringify({ sent: sentCount }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Hiç e-posta gitmediyse bekleme süresini başlatma.
+    if (sentCount === 0) {
+      await supabase.from("low_stock_alert_log").delete().eq("id", logRow.id);
+      return json({ error: "Gönderim başarısız" }, 502);
+    }
+
+    return json({ sent: sentCount });
   } catch (err) {
     console.error("send-low-stock-alert error:", err);
-    return new Response(
-      JSON.stringify({ error: String((err as Error).message ?? err) }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return json({ error: "Gönderim başarısız" }, 500);
   }
 });

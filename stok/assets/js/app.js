@@ -823,13 +823,8 @@ async function triggerLowStockAlert(product) {
         'Authorization': `Bearer ${token}`,
         'apikey': SUPABASE_KEY
       },
-      body: JSON.stringify({
-        productName:    product.name,
-        productBarcode: product.barcode || '',
-        newStock:       product.stock,
-        minStock:       product.minStock || 0,
-        depo:           product.depo || ''
-      })
+      // Sunucu ad/stok/eşik/depo bilgisini kendisi veritabanından okur; istemciden yalnızca kimlik gider.
+      body: JSON.stringify({ productId: product.id })
     });
     if (!resp.ok) {
       const txt = await resp.text();
