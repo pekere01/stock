@@ -70,6 +70,7 @@ export function switchAdminTab(tab) {
   const sec = document.getElementById('admin-section-' + tab);
   if (sec) sec.classList.add('active');
   if (tab === 'logs') { logsPage = 0; loadAuditLogs(); }
+  if (tab === 'audit') { auditPage = 0; loadAdminAudit(); }
   if (tab === 'create-user') onCreateUserTabOpen();
 }
 
@@ -428,6 +429,141 @@ export async function handleCreateUser(e) {
   }
 }
 
+/* ===== YÖNETİCİ KAYITLARI (admin_audit_log — yalnızca admin okuyabilir, yazma sunucudan) ===== */
+let auditPage = 0;
+let auditTotalCount = 0;
+const AUDIT_PAGE_SIZE = 50;
+
+const AUDIT_ACTION_LABELS = {
+  kullanici_olusturuldu:     { label: 'Kullanıcı oluşturuldu',        color: 'var(--success, #22c55e)' },
+  kullanici_silindi:         { label: 'Kullanıcı silindi',            color: 'var(--danger, #ef4444)' },
+  kullanici_guncellendi:     { label: 'Kullanıcı güncellendi',        color: 'var(--accent, #3b82f6)' },
+  yetki_degisti:             { label: 'Yetki değişti',                color: 'var(--amber, #f59e0b)' },
+  yetki_kaydi_olusturuldu:   { label: 'Yetki kaydı oluşturuldu',      color: 'var(--success, #22c55e)' },
+  yetki_kaydi_silindi:       { label: 'Yetki kaydı silindi',          color: 'var(--danger, #ef4444)' },
+  urun_silindi:              { label: 'Ürün silindi',                 color: 'var(--danger, #ef4444)' },
+  inceleme_kalici_kapatildi: { label: 'İncelemeden kalıcı kapatma',   color: 'var(--amber, #f59e0b)' },
+  yetkisiz_deneme:           { label: 'Yetkisiz deneme',              color: 'var(--danger, #ef4444)' },
+  super_admin_koruma_engeli: { label: 'Süper admin koruması (engellendi)', color: 'var(--danger, #ef4444)' },
+};
+const AUDIT_PERM_LABELS = {
+  view: 'Görüntüleme', add_products: 'Ürün Ekle/Düzenle', make_sales: 'Satış / Stok Çıkar',
+  manage_categories: 'Kategori Yönetimi', view_history: 'Hareket Geçmişi', admin: 'Yönetici',
+  receives_email_alerts: 'E-posta bildirimi', role: 'Rol',
+};
+
+function auditVal(v) {
+  if (v === true) return 'açık';
+  if (v === false) return 'kapalı';
+  if (v === null || v === undefined) return '—';
+  return String(v);
+}
+
+function auditDetailsText(row) {
+  const d = row.details || {};
+  const a = row.action || '';
+  if (a.endsWith('_basarisiz')) return d.hata || 'İşlem başarısız';
+  switch (a) {
+    case 'yetki_degisti':
+      return Object.entries(d.degisiklikler || {})
+        .map(([k, v]) => `${AUDIT_PERM_LABELS[k] || k}: ${auditVal(v?.eski)} → ${auditVal(v?.yeni)}`)
+        .join(' · ') || '—';
+    case 'kullanici_guncellendi': {
+      const parts = [];
+      if (d.email_degisti) parts.push(`E-posta: ${auditVal(d.email_degisti.eski)} → ${auditVal(d.email_degisti.yeni)}`);
+      if (d.sifre_degisti) parts.push('Şifre değiştirildi');
+      return parts.join(' · ') || 'Değişiklik yok';
+    }
+    case 'kullanici_silindi':
+      return d.email || '—';
+    case 'kullanici_olusturuldu':
+      return d.ad ? `Ad: ${d.ad}` : '—';
+    case 'yetki_kaydi_olusturuldu':
+    case 'yetki_kaydi_silindi': {
+      const on = Object.entries(d.permissions || {}).filter(([, v]) => v === true).map(([k]) => AUDIT_PERM_LABELS[k] || k);
+      if (d.receives_email_alerts) on.push('E-posta bildirimi');
+      return on.length ? `Açık yetkiler: ${on.join(', ')}` : 'Yetkisiz kayıt';
+    }
+    case 'urun_silindi':
+      return `Barkod: ${auditVal(d.barkod)} · Stok: ${auditVal(d.stok)}${d.kategori ? ' · ' + d.kategori : ''}`;
+    case 'inceleme_kalici_kapatildi':
+      return [d.urun_adi, d.miktar != null ? `${d.miktar} adet` : null, d.irsaliye_no ? `irsaliye ${d.irsaliye_no}` : null]
+        .filter(Boolean).join(' · ') || '—';
+    case 'super_admin_koruma_engeli':
+      return `Denenen işlem: ${auditVal(d.islem)}`;
+    case 'yetkisiz_deneme':
+      return d.not || '—';
+    default:
+      return Object.keys(d).length ? JSON.stringify(d) : '—';
+  }
+}
+
+export function refreshAdminAudit() {
+  auditPage = 0;
+  loadAdminAudit();
+}
+
+export function adminAuditGoPage(page) {
+  if (page < 0) return;
+  auditPage = page;
+  loadAdminAudit();
+}
+
+export async function loadAdminAudit() {
+  const tbody = document.getElementById('admin-audit-body');
+  const countEl = document.getElementById('audit-count-label');
+  const pagEl = document.getElementById('admin-audit-pagination');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5"><div class="admin-empty">Yükleniyor…</div></td></tr>';
+  try {
+    const from = auditPage * AUDIT_PAGE_SIZE;
+    const to   = from + AUDIT_PAGE_SIZE - 1;
+    const { data, error, count } = await sb.from('admin_audit_log')
+      .select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
+    if (error) throw error;
+    auditTotalCount = count || 0;
+    if (!data || data.length === 0) {
+      if (countEl) countEl.textContent = '';
+      if (pagEl) pagEl.innerHTML = '';
+      tbody.innerHTML = '<tr><td colspan="5"><div class="admin-empty">Henüz yönetici işlemi kaydı yok.</div></td></tr>';
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(auditTotalCount / AUDIT_PAGE_SIZE));
+    if (countEl) countEl.textContent = `${auditTotalCount} kayıttan ${from + 1}-${from + data.length} arası gösteriliyor`;
+    if (pagEl) {
+      pagEl.innerHTML = `
+        <button class="btn btn-secondary" ${auditPage <= 0 ? 'disabled' : ''} onclick="adminAuditGoPage(${auditPage - 1})">← Önceki</button>
+        <span style="font-size:12px;color:var(--text-secondary);padding:0 8px;">${auditPage + 1} / ${totalPages}</span>
+        <button class="btn btn-secondary" ${auditPage >= totalPages - 1 ? 'disabled' : ''} onclick="adminAuditGoPage(${auditPage + 1})">Sonraki →</button>`;
+    }
+    tbody.innerHTML = data.map(row => {
+      const meta = AUDIT_ACTION_LABELS[row.action]
+        || (row.action && row.action.endsWith('_basarisiz')
+          ? { label: 'İşlem başarısız', color: 'var(--danger, #ef4444)' }
+          : { label: row.action || '—', color: 'var(--text-secondary)' });
+      const dt = new Date(row.created_at);
+      const dateStr = dt.toLocaleDateString('tr-TR');
+      const timeStr = dt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const who = STATIC_NAMES[row.actor_email] || row.actor_email || 'Sistem';
+      return `<tr>
+        <td>
+          <div class="log-date" style="font-size:12px;color:var(--text-primary);">${escapeHtml(dateStr)}</div>
+          <div class="log-sub">${escapeHtml(timeStr)}</div>
+        </td>
+        <td>
+          <div class="log-user">${escapeHtml(who)}</div>
+          ${row.ip ? `<div class="log-sub">${escapeHtml(row.ip)}</div>` : ''}
+        </td>
+        <td><span class="log-action-badge" style="color:${meta.color}">${escapeHtml(meta.label)}</span></td>
+        <td><div class="log-product">${escapeHtml(row.target_label || row.target_id || '—')}</div></td>
+        <td class="log-sub">${escapeHtml(auditDetailsText(row))}</td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="admin-empty">Hata: ${escapeHtml(friendlyError(err))}</div></td></tr>`;
+  }
+}
+
 window.openAdminPanel    = openAdminPanel;
 window.closeAdminPanel   = closeAdminPanel;
 window.switchAdminTab    = switchAdminTab;
@@ -437,6 +573,9 @@ window.saveUserDetail    = saveUserDetail;
 window.loadAuditLogs     = loadAuditLogs;
 window.refreshAuditLogs  = refreshAuditLogs;
 window.logsGoPage        = logsGoPage;
+window.refreshAdminAudit   = refreshAdminAudit;
+window.adminAuditGoPage   = adminAuditGoPage;
+window.loadAdminAudit      = loadAdminAudit;
 window.togglePerm        = togglePerm;
 window.toggleEmailAlerts = toggleEmailAlerts;
 window.savePermissions   = savePermissions;
