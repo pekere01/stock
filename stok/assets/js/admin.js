@@ -373,20 +373,15 @@ export function askDeleteUser(userId, email) {
     `"${email}" kalıcı olarak silinecek`,
     "Kullanıcı hem veritabanından hem Supabase Auth'tan tamamen silinecek. Giriş yapamaz hale gelir. Bu işlem geri alınamaz.",
     async () => {
-      let dbOk = false, authOk = false, dbErrMsg = '', authErrMsg = '';
-      try {
-        const { error } = await sb.from('user_permissions').delete().eq('user_id', userId);
-        if (error) dbErrMsg = friendlyError(error); else dbOk = true;
-      } catch (e) { dbErrMsg = friendlyError(e); }
+      // Önce hesap silinir (yetki satırı bağlantıdan otomatik gider); Auth silme başarısız olursa
+      // hiçbir şey değişmemiş olur, yarım silinmiş hesap kalmaz.
       try {
         await adminInvoke('delete_user', { userId });
-        authOk = true;
-      } catch (e) { authErrMsg = friendlyError(e); }
+        toast(`${email} tamamen silindi`);
+      } catch (e) {
+        toast(`Silme başarısız: ${friendlyError(e)}`, 'error');
+      }
       loadAdminUsers();
-      if (dbOk && authOk)        toast(`${email} tamamen silindi`);
-      else if (dbOk && !authOk)  toast(`DB silindi — Auth hatası: ${authErrMsg}`, 'error');
-      else if (!dbOk && authOk)  toast(`Auth silindi — DB hatası: ${dbErrMsg}`, 'error');
-      else                        toast(`Silme başarısız — DB: ${dbErrMsg}`, 'error');
     }
   );
 }

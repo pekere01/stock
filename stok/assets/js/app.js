@@ -202,7 +202,7 @@ export async function loadData(page = 0, recount = true) {
     ]);
     if (catsRes.error) throw catsRes.error;
     if (prodsRes.error) throw prodsRes.error;
-    categories = (catsRes.data || []).map(r => ({ name: r.name, color: r.color || '#3b82f6' }));
+    categories = (catsRes.data || []).map(r => ({ name: r.name, color: /^#[0-9a-fA-F]{6}$/.test(r.color || '') ? r.color : '#3b82f6' }));
     products   = (prodsRes.data || []).map(dbToProduct);
     // "7G Satış": eski products.sales7d sayacı yerine son 7 günün gerçek satış hareketleri (Mikro dahil).
     if (products.length) {
@@ -450,7 +450,7 @@ function renderBar() {
       ${p.sales7d}
       <animate attributeName="opacity" from="0" to="1" dur="0.4s" begin="${0.8 + i * 0.07}s" fill="freeze"/>
     </text>`;
-    html += `<text x="${x + barW / 2}" y="${pad.t + innerH + 18}" text-anchor="middle" style="fill:var(--text-secondary)" font-size="10" transform="rotate(-25 ${x + barW / 2} ${pad.t + innerH + 18})">${shortName}</text>`;
+    html += `<text x="${x + barW / 2}" y="${pad.t + innerH + 18}" text-anchor="middle" style="fill:var(--text-secondary)" font-size="10" transform="rotate(-25 ${x + barW / 2} ${pad.t + innerH + 18})">${escapeHtml(shortName)}</text>`;
   });
   html += `</svg>`;
   wrap.innerHTML = html;
@@ -1768,7 +1768,7 @@ function renderHistory() {
       <td style="white-space:nowrap;color:var(--text-secondary);font-size:11px">${dateStr}</td>
       <td style="font-weight:500">${escapeHtml(r.product_name || '—')}</td>
       <td style="font-size:11px;color:var(--text-secondary)">${escapeHtml(r.user_email || '—')}</td>
-      <td><span style="color:${meta.color};font-size:12px;font-weight:500">${meta.label}</span></td>
+      <td><span style="color:${meta.color};font-size:12px;font-weight:500">${escapeHtml(meta.label)}</span></td>
       <td>${stockHtml}</td>
       <td style="font-size:11px;color:var(--text-secondary);max-width:200px;white-space:normal;word-break:break-word">${detailHtml || '—'}</td>
     </tr>`;
