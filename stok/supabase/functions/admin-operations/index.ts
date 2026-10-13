@@ -1,11 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Prod domain sabit; yerelde geliştirirken localhost otomatik izinli.
+// Prod domain sabit. localhost yalnızca ALLOW_LOCALHOST_CORS=true gizli ayarı açıkken izinlidir
+// (yerelde canlı Supabase'e karşı geliştirirken: supabase secrets set ALLOW_LOCALHOST_CORS=true;
+// işin bitince: supabase secrets unset ALLOW_LOCALHOST_CORS).
 // Custom domain bağlandığında ALLOWED_ORIGINS'e ekleyin.
 const ALLOWED_ORIGINS = new Set(["https://soncagstock.vercel.app"]);
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;
+  if (Deno.env.get("ALLOW_LOCALHOST_CORS") !== "true") return false;
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 }
 function corsHeadersFor(req: Request) {

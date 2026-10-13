@@ -1,12 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer";
 
-// Prod domain sabit; yerelde geliştirirken localhost otomatik izinli.
+// Prod domain sabit. localhost yalnızca ALLOW_LOCALHOST_CORS=true gizli ayarı açıkken izinlidir
+// (yerelde canlı Supabase'e karşı geliştirirken: supabase secrets set ALLOW_LOCALHOST_CORS=true;
+// işin bitince: supabase secrets unset ALLOW_LOCALHOST_CORS).
 // Custom domain bağlandığında ALLOWED_ORIGINS'e ekleyin.
 const ALLOWED_ORIGINS = new Set(["https://soncagstock.vercel.app"]);
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;
+  if (Deno.env.get("ALLOW_LOCALHOST_CORS") !== "true") return false;
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 }
 function corsHeadersFor(req: Request) {
@@ -24,7 +27,8 @@ function escapeHtml(s: unknown): string {
   );
 }
 
-const SUPER_ADMIN_EMAIL = "teknik@soncag.com";
+// Süper admin kimliğe (UUID) bağlıdır; e-posta değişse de aynı hesap kalır.
+const SUPER_ADMIN_ID = "ab0b3832-a82a-47a0-aa2f-a73dfb7c01dd";
 // Aynı ürün için en fazla bu kadar sıklıkta e-posta gider.
 const COOLDOWN_MINUTES = 60;
 // Uyarı, çağıranın bu ürüne yaptığı gerçek bir satışa bağlı olmalı.
@@ -66,7 +70,7 @@ Deno.serve(async (req) => {
     });
 
     // 1) Yetki: yalnızca satış yetkisi olan (veya yönetici) bu uyarıyı tetikleyebilir.
-    let allowed = caller.email === SUPER_ADMIN_EMAIL;
+    let allowed = caller.id === SUPER_ADMIN_ID;
     if (!allowed) {
       const { data: perm } = await supabase
         .from("user_permissions")
