@@ -133,7 +133,8 @@ function renderInTestRows(items) {
     btnClear.className = 'btn btn-secondary';
     btnClear.textContent = 'İşareti Kaldır';
     btnClear.onclick = () => window.clearInTestFlag(item.id);
-    tdIslem.appendChild(btnClear);
+    // products güncellemesi artık yalnızca add_products (satış yetkisi tablo güncelleyemez)
+    if (canDo('add_products')) tdIslem.appendChild(btnClear);
     tr.append(tdName, tdBarcode, tdStock, tdIslem);
     fragment.appendChild(tr);
   });
