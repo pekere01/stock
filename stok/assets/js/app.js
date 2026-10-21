@@ -1048,6 +1048,7 @@ const EXPORT_FILTER_SUFFIX = {
 };
 
 const dec = n => Number(n).toFixed(2).replace('.', ',');
+const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
 const EXPORT_COLUMN_DEFS = [
   { key: 'id',         label: 'ID',            val: p => p.id },
@@ -1055,13 +1056,13 @@ const EXPORT_COLUMN_DEFS = [
   { key: 'barcode',    label: 'Barkod No',     val: p => p.barcode },
   { key: 'category',   label: 'Kategori',      val: p => p.category },
   { key: 'depo',       label: 'Depo',          val: p => p.depo || '' },
-  { key: 'price',      label: 'Fiyat (€)',     money: true, val: p => dec(p.price) },
-  { key: 'cost',       label: 'Maliyet (€)',   money: true, val: p => dec(p.cost) },
-  { key: 'margin',     label: 'Kar Marji (%)', money: true, val: p => dec(p.price > 0 ? (p.price - p.cost) / p.price * 100 : 0) },
-  { key: 'stock',      label: 'Stok',          val: p => p.stock },
-  { key: 'minStock',   label: 'Min. Stok',     val: p => p.minStock },
-  { key: 'sales7d',    label: '7g Satış',      val: p => p.sales7d },
-  { key: 'stockValue', label: 'Stok Değeri',   money: true, val: p => dec(p.stock * p.cost) },
+  { key: 'price',      label: 'Fiyat (€)',     money: true, num: p => round2(p.price), val: p => dec(p.price) },
+  { key: 'cost',       label: 'Maliyet (€)',   money: true, num: p => round2(p.cost), val: p => dec(p.cost) },
+  { key: 'margin',     label: 'Kar Marji (%)', money: true, num: p => round2(p.price > 0 ? (p.price - p.cost) / p.price * 100 : 0), val: p => dec(p.price > 0 ? (p.price - p.cost) / p.price * 100 : 0) },
+  { key: 'stock',      label: 'Stok',          num: p => Number(p.stock) || 0, val: p => p.stock },
+  { key: 'minStock',   label: 'Min. Stok',     num: p => Number(p.minStock) || 0, val: p => p.minStock },
+  { key: 'sales7d',    label: '7g Satış',      num: p => Number(p.sales7d) || 0, val: p => p.sales7d },
+  { key: 'stockValue', label: 'Stok Değeri',   money: true, num: p => round2(p.stock * p.cost), val: p => dec(p.stock * p.cost) },
   { key: 'status',     label: 'Durum',         val: p => statusLabel(calcStatus(p)) },
 ];
 
@@ -1152,7 +1153,7 @@ export async function exportCSV(status = '') {
     const suffix = category
       ? `${EXPORT_FILTER_SUFFIX[status] ?? 'tum-urunler'}-${slugify(category)}`
       : (EXPORT_FILTER_SUFFIX[status] ?? 'tum-urunler');
-    downloadProductsCSV(rows, suffix, cols);
+    await downloadProductsXLSX(rows, suffix, cols);
   } catch (err) {
     toast('Dışa aktarma hatası: ' + friendlyError(err), 'error');
   }
@@ -1183,21 +1184,57 @@ async function fetchAllProductsForExport(status, category = '') {
   return all;
 }
 
-function downloadProductsCSV(rows, suffix, cols) {
-  const headers = cols.map(c => c.label);
-  const csvRows = rows.map(p => cols.map(c => c.val(p)));
-  const csv = [headers, ...csvRows].map(row =>
-    row.map(cell => {
-      const s = String(cell);
-      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    }).join(';')
-  ).join('\r\n');
-  const BOM  = '﻿';
-  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+// ExcelJS yalnız dışa aktarırken yüklenir (SheetJS ücretsiz sürümü hücre hizalaması yazamıyor).
+let excelJsPromise = null;
+function loadExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  excelJsPromise ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = () => resolve(window.ExcelJS);
+    s.onerror = () => { excelJsPromise = null; reject(new Error('Excel kütüphanesi yüklenemedi')); };
+    document.head.appendChild(s);
+  });
+  return excelJsPromise;
+}
+
+// Metin sütunları (ad, barkod, depo…) her zaman metin + sola dayalı — "5.043.261" gibi adlar
+// veya barkodlar Excel'de sayıya dönmez; sayı sütunları gerçek sayı + ortalı.
+async function downloadProductsXLSX(rows, suffix, cols) {
+  const ExcelJS = await loadExcelJS();
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Stok');
+  ws.columns = cols.map(c => {
+    const isNum = !!c.num;
+    const longest = Math.max(c.label.length, ...rows.slice(0, 2000).map(p => String(c.val(p) ?? '').length));
+    return {
+      header: c.label,
+      key: c.key,
+      width: Math.min(Math.max(longest + 2, isNum ? 10 : 12), 70),
+      style: {
+        alignment: { horizontal: isNum ? 'center' : 'left', vertical: 'middle' },
+        numFmt: isNum ? (c.money ? '#,##0.00' : '0') : '@',
+      },
+    };
+  });
+  rows.forEach(p => {
+    const rec = {};
+    cols.forEach(c => { rec[c.key] = c.num ? c.num(p) : String(c.val(p) ?? ''); });
+    ws.addRow(rec);
+  });
+  const header = ws.getRow(1);
+  header.font = { bold: true };
+  header.eachCell((cell, i) => {
+    cell.alignment = { horizontal: cols[i - 1].num ? 'center' : 'left', vertical: 'middle' };
+  });
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const buf  = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `stok-raporu-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `stok-raporu-${suffix}-${new Date().toISOString().slice(0, 10)}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
