@@ -151,15 +151,18 @@ export async function clearInTestFlag(id) {
 }
 
 export async function loadReviewPanel() {
-  const [sctRaw, digerRaw, inTest] = await Promise.all([
+  const [sciRaw, sctRaw, digerRaw, inTest] = await Promise.all([
+    fetchReviewItems('sci'),
     fetchReviewItems('sct'),
     fetchReviewItems('diger'),
     fetchInTestProducts(),
   ]);
-  const [sct, diger] = await Promise.all([
+  const [sci, sct, diger] = await Promise.all([
+    attachProductNames(sciRaw),
     attachProductNames(sctRaw),
     attachProductNames(digerRaw),
   ]);
+  renderReviewRows(sci, 'review-table-sci-body');
   renderReviewRows(sct, 'review-table-sct-body', true);
   renderReviewRows(diger, 'review-table-diger-body');
   renderInTestRows(inTest);
