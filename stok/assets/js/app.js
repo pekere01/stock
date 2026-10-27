@@ -687,12 +687,17 @@ export async function submitProductForm(e) {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor…'; }
   try {
     // server-side duplicate check — client-side products[] is only current page
+    // Düzenlemede değişmeyen alan kontrol edilmez — DB'de zaten aynı adlı kardeş ürün varsa
+    // (30 grup var) stok/depo düzeltmesi engellenmesin.
+    const orig = editingId ? products.find(x => x.id === editingId) : null;
+    const barcodeChanged = !orig || (orig.barcode || '').trim().toLowerCase() !== barcode.toLowerCase();
+    const nameChanged    = !orig || (orig.name || '').trim().toLowerCase() !== name.toLowerCase();
     let dup = null, dupReason = '';
-    if (barcode) {
+    if (barcode && barcodeChanged) {
       const { data: bRows } = await sb.from('products').select('*').ilike('barcode', barcode).neq('id', editingId || -1).limit(1);
       if (bRows?.length) { dup = dbToProduct(bRows[0]); dupReason = 'barkod'; }
     }
-    if (!dup) {
+    if (!dup && nameChanged) {
       const { data: nRows } = await sb.from('products').select('*').ilike('name', name).neq('id', editingId || -1).limit(1);
       if (nRows?.length) { dup = dbToProduct(nRows[0]); dupReason = 'ürün adı'; }
     }
