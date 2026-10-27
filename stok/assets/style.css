@@ -126,8 +126,6 @@
     background: var(--glass-highlight);
     pointer-events: none;
   }
-  /* Sekmeye dönüşte çizim kusurunu temizlemek için (app.js visibilitychange) — bir kare sürer */
-  .repaint-glass * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
   @supports not (backdrop-filter: blur(1px)) {
     .glass, .rail, .modal, .dropdown-menu, .toast, thead th { background: rgba(13,13,20,0.94) !important; }
   }
@@ -1261,6 +1259,14 @@
   @media (max-width: 1024px) {
     .charts-grid { grid-template-columns: 1fr; }
     .app-shell .content { padding: 24px 20px 36px; }
+  }
+
+  /* Sayfa yüzeylerinde backdrop-filter kapalı: Chrome, imleç girince/sekmeye dönünce bu katmanları
+     yeniden çizerken kartların üstünde anlık açık çizgi bırakıyordu (2026-10-27). Arkadaki aurora zaten
+     blur(100px) olduğu için görünüm değişmez. Modal/dropdown/toast blur'u korunur. */
+  .stat-card, .chart-card, .filter-bar, .table-wrap, .glass, .rail {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   @media (max-width: 768px) {
