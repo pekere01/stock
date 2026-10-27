@@ -1850,5 +1850,14 @@ window.closeHistoryOnOverlay     = closeHistoryOnOverlay;
 window.loadHistory                = loadHistory;
 window.renderHistory             = renderHistory;
 
+// Chrome, sekme gizlenip geri gelince backdrop-filter katmanlarını bazen eksik çiziyor (kartların
+// üstünde açık bant). Görünür olunca blur'u bir kareliğine kapatıp açarak katmanları yeniden çizdir.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const root = document.documentElement;
+  root.classList.add('repaint-glass');
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('repaint-glass')));
+});
+
 init();
 bootstrapAuth();
