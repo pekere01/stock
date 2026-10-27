@@ -1,5 +1,5 @@
 import { sb } from './supabase.js';
-import { currentUser, SUPER_ADMIN_EMAIL, PERM_DEFS, DEFAULT_PERMISSIONS, STATIC_NAMES } from './auth.js';
+import { currentUser, SUPER_ADMIN_EMAIL, PERM_DEFS, DEFAULT_PERMISSIONS, STATIC_NAMES, isAdmin } from './auth.js';
 import { toast, showConfirm, escapeHtml, friendlyError, lockBodyScroll, unlockBodyScroll } from './ui.js';
 
 async function adminInvoke(action, payload = {}) {
@@ -62,6 +62,8 @@ export function openAdminPanel() {
   if (adminTitleBadge) {
     adminTitleBadge.textContent = currentUser?.email === SUPER_ADMIN_EMAIL ? 'ADMIN' : 'YÖNETİCİ';
   }
+  const loginsTab = document.getElementById('admin-tab-logins');
+  if (loginsTab) loginsTab.style.display = isAdmin() ? '' : 'none';
   switchAdminTab('users');
   loadAdminUsers();
 }
@@ -78,6 +80,7 @@ export function switchAdminTab(tab) {
   if (sec) sec.classList.add('active');
   if (tab === 'logs') { logsPage = 0; loadAuditLogs(); }
   if (tab === 'audit') { auditPage = 0; loadAdminAudit(); }
+  if (tab === 'logins') { loginsPage = 0; loadLogins(); }
   if (tab === 'create-user') onCreateUserTabOpen();
 }
 
@@ -566,6 +569,88 @@ export async function loadAdminAudit() {
   }
 }
 
+/* ===== GİRİŞLER (login_log — şimdilik yalnızca süper admin okuyabilir, yazma log-login fonksiyonundan) ===== */
+let loginsPage = 0;
+const LOGINS_PAGE_SIZE = 50;
+
+function describeDevice(ua) {
+  if (!ua) return '—';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome'
+    : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Tarayıcı';
+  const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS'
+    : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : '';
+  const mobile = /Mobile|Android|iPhone/.test(ua) ? ' · mobil' : '';
+  return `${browser}${os ? ' · ' + os : ''}${mobile}`;
+}
+
+export function refreshLogins() {
+  loginsPage = 0;
+  loadLogins();
+}
+
+export function loginsGoPage(page) {
+  if (page < 0) return;
+  loginsPage = page;
+  loadLogins();
+}
+
+export async function loadLogins() {
+  const tbody = document.getElementById('admin-logins-body');
+  const countEl = document.getElementById('logins-count-label');
+  const pagEl = document.getElementById('admin-logins-pagination');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5"><div class="admin-empty">Yükleniyor…</div></td></tr>';
+  try {
+    const from = loginsPage * LOGINS_PAGE_SIZE;
+    const to   = from + LOGINS_PAGE_SIZE - 1;
+    const { data, error, count } = await sb.from('login_log')
+      .select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
+    if (error) throw error;
+    const total = count || 0;
+    if (!data || data.length === 0) {
+      if (countEl) countEl.textContent = '';
+      if (pagEl) pagEl.innerHTML = '';
+      tbody.innerHTML = '<tr><td colspan="5"><div class="admin-empty">Henüz giriş kaydı yok.</div></td></tr>';
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(total / LOGINS_PAGE_SIZE));
+    if (countEl) countEl.textContent = `${total} kayıttan ${from + 1}-${from + data.length} arası gösteriliyor`;
+    if (pagEl) {
+      pagEl.innerHTML = `
+        <button class="btn btn-secondary" ${loginsPage <= 0 ? 'disabled' : ''} onclick="loginsGoPage(${loginsPage - 1})">← Önceki</button>
+        <span style="font-size:12px;color:var(--text-secondary);padding:0 8px;">${loginsPage + 1} / ${totalPages}</span>
+        <button class="btn btn-secondary" ${loginsPage >= totalPages - 1 ? 'disabled' : ''} onclick="loginsGoPage(${loginsPage + 1})">Sonraki →</button>`;
+    }
+    tbody.innerHTML = data.map(row => {
+      const dt = new Date(row.created_at);
+      const dateStr = dt.toLocaleDateString('tr-TR');
+      const timeStr = dt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const who = STATIC_NAMES[row.email] || row.email || '—';
+      const kind = row.event === 'giris'
+        ? { label: 'Şifreyle giriş', color: 'var(--accent, #3b82f6)' }
+        : { label: 'Site açıldı', color: 'var(--text-secondary)' };
+      const place = [row.city, row.country].filter(Boolean).join(', ') || 'Bilinmiyor';
+      return `<tr>
+        <td>
+          <div class="log-date" style="font-size:12px;color:var(--text-primary);">${escapeHtml(dateStr)}</div>
+          <div class="log-sub">${escapeHtml(timeStr)}</div>
+        </td>
+        <td><div class="log-user">${escapeHtml(who)}</div></td>
+        <td><span class="log-action-badge" style="color:${kind.color}">${escapeHtml(kind.label)}</span></td>
+        <td>
+          <div class="log-product">${escapeHtml(place)}</div>
+          ${row.ip ? `<div class="log-sub">${escapeHtml(row.ip)}</div>` : ''}
+        </td>
+        <td class="log-sub">${escapeHtml(describeDevice(row.user_agent))}</td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="admin-empty">Hata: ${escapeHtml(friendlyError(err))}</div></td></tr>`;
+  }
+}
+
+window.refreshLogins     = refreshLogins;
+window.loginsGoPage      = loginsGoPage;
 window.openAdminPanel    = openAdminPanel;
 window.closeAdminPanel   = closeAdminPanel;
 window.switchAdminTab    = switchAdminTab;

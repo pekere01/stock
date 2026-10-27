@@ -122,6 +122,13 @@ export async function logAction(action, productName, productBarcode, quantity, n
   }
 }
 
+// Giriş kaydı (login_log): beklenmez, hata yutulur — kayıt yazılamasa da giriş etkilenmez.
+function logLogin(event) {
+  try {
+    sb.functions.invoke('log-login', { body: { event } }).catch(() => {});
+  } catch { /* yok say */ }
+}
+
 function translateAuthError(msg) {
   if (!msg) return 'Bir hata oluştu.';
   if (/Invalid login credentials/i.test(msg)) return 'E-posta veya şifre hatalı.';
@@ -147,6 +154,7 @@ export async function handleAuthSubmit(e) {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
     currentUser = data.user;
+    logLogin('giris');
     enterApp();
     toast('Hoş geldin!');
   } catch (err) {
@@ -218,6 +226,7 @@ export async function bootstrapAuth() {
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
       currentUser = session.user;
+      logLogin('oturum');
       enterApp();
     } else {
       exitApp();

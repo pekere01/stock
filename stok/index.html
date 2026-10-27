@@ -301,6 +301,10 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
       Yönetici Kayıtları
     </button>
+    <button class="admin-tab-btn" data-tab="logins" id="admin-tab-logins" style="display:none" onclick="switchAdminTab('logins')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+      Girişler
+    </button>
   </div>
 
   <!-- Tab: Kullanıcılar -->
@@ -463,6 +467,31 @@
       </table>
     </div>
     <div id="admin-audit-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;"></div>
+  </div>
+
+  <!-- Tab: Girişler (login_log — şimdilik yalnızca süper admin okuyabilir) -->
+  <div id="admin-section-logins" class="admin-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <span style="font-size:13px;color:var(--text-secondary)" id="logins-count-label"></span>
+      <button class="btn btn-secondary" onclick="refreshLogins()">Yenile</button>
+    </div>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Tarih / Saat</th>
+            <th>Kullanıcı</th>
+            <th>Tür</th>
+            <th>Konum</th>
+            <th>Cihaz</th>
+          </tr>
+        </thead>
+        <tbody id="admin-logins-body">
+          <tr><td colspan="5"><div class="admin-empty">Yükleniyor…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="admin-logins-pagination" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;"></div>
   </div>
 </div>
 
