@@ -157,7 +157,6 @@ export async function loadData(page = 0, recount = true) {
   const to   = from + PAGE_SIZE - 1;
   try {
     const safe          = (pageSearch || '').replace(/[*%,()]/g, '');
-    const hasTextSearch = !!safe;
     const hasFilter     = !!(safe || pageCatFilter || pageStatusFilter || pageDepoFilter);
     const wantsDepoList = isAdmin() || currentPermissions?.admin === true;
     let q = sb.from('products')
@@ -175,13 +174,10 @@ export async function loadData(page = 0, recount = true) {
     }
     if (pageCatFilter)     q = q.eq('category', pageCatFilter);
     if (pageDepoFilter)    q = q.filter('warehouse_info', 'imatch', depoGroupPattern(pageDepoFilter));
-    // Metin araması varken Durum filtresi görmezden gelinir — kullanıcı bir ürün adı/barkod
-    // yazdığında "Stokta Olanlar" gibi varsayılan bir filtre yüzünden tükenmiş/pasif ürünler
-    // sessizce dışlanmasın (2026-09-02, "T490 LNMT 1306PNTR IC808" bulunamadı bug'ı).
-    if (!hasTextSearch) {
-      if (pageStatusFilter === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
-      else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
-    }
+    // Durum filtresi aramaya da uygulanır (2026-10-27, pekere isteği). Eskiden aramada yok
+    // sayılıyordu ("T490 ... bulunamadı" bug'ı); şimdi boş sonuçta renderTable ipucu gösterir.
+    if (pageStatusFilter === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
+    else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
     q = q.range(from, to);
 
     const [catsRes, prodsRes, rpcRes, depoRes] = await Promise.all([
@@ -479,6 +475,7 @@ function renderTable() {
     tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       <div>Ürün bulunamadı</div>
+      ${pageSearch && pageStatusFilter ? '<div style="font-size:13px;margin-top:6px;opacity:.75">Durum filtresi açık — tükenmiş ürünler için "Tüm Durumlar"ı seçin</div>' : ''}
     </div></td></tr>`;
     return;
   }
