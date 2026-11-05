@@ -2,7 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Giriş kaydı: kim, ne zaman, hangi IP/şehirden. IP ve konum sunucuda belirlenir (istemciye güvenilmez).
 // İstemci bu çağrıyı beklemez; burada ne olursa olsun giriş akışı etkilenmez.
-const ALLOWED_ORIGINS = new Set(["https://soncagstock.vercel.app"]);
+const ALLOWED_ORIGINS = new Set([
+  "https://soncagstock.vercel.app",
+  "https://soncagstock.com",
+  "https://www.soncagstock.com",
+]);
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;

@@ -4,7 +4,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // (yerelde canlı Supabase'e karşı geliştirirken: supabase secrets set ALLOW_LOCALHOST_CORS=true;
 // işin bitince: supabase secrets unset ALLOW_LOCALHOST_CORS).
 // Custom domain bağlandığında ALLOWED_ORIGINS'e ekleyin.
-const ALLOWED_ORIGINS = new Set(["https://soncagstock.vercel.app"]);
+const ALLOWED_ORIGINS = new Set([
+  "https://soncagstock.vercel.app",
+  "https://soncagstock.com",
+  "https://www.soncagstock.com",
+]);
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;
