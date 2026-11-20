@@ -865,6 +865,7 @@
   .stock-cell { display: flex; flex-direction: column; gap: 5px; }
   .stock-row { display: flex; align-items: center; gap: 4px; }
   .stock-num { font-size: 13px; }
+  .stock-num.negative { color: var(--error); }
   .stock-bar {
     width: 64px;
     height: 4px;

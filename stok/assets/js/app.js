@@ -177,6 +177,8 @@ export async function loadData(page = 0, recount = true) {
     // Durum filtresi aramaya da uygulanır (2026-10-27, pekere isteği). Eskiden aramada yok
     // sayılıyordu ("T490 ... bulunamadı" bug'ı); şimdi boş sonuçta renderTable ipucu gösterir.
     if (pageStatusFilter === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
+    // Eksi stok bir durum değil (status = out_of_stock); Mikro satışı girişten önce gelince oluşur.
+    else if (pageStatusFilter === 'negative') q = q.lt('stock', 0);
     else if (pageStatusFilter)         q = q.eq('status', pageStatusFilter);
     q = q.range(from, to);
 
@@ -226,8 +228,8 @@ function pickNextColor() {
 function renderStats() {
   const s             = dashboardSummary;
   const total         = s?.total_products    ?? totalCount;
-  const totalQty      = s?.total_stock      ?? products.reduce((acc, p) => acc + (p.stock || 0), 0);
-  const stockValueEUR = s?.total_cost_value ?? products.reduce((acc, p) => acc + p.stock * (p.cost || 0), 0);
+  const totalQty      = s?.total_stock      ?? products.reduce((acc, p) => acc + Math.max(0, p.stock || 0), 0);
+  const stockValueEUR = s?.total_cost_value ?? products.reduce((acc, p) => acc + Math.max(0, p.stock) * (p.cost || 0), 0);
   const lowCount      = s?.low_stock_count  ?? products.filter(p => p.stock <= p.minStock).length;
   const avgMargin     = s?.avg_margin       ?? (() => {
     const ms = products.filter(p => p.price > 0).map(p => ((p.price - p.cost) / p.price) * 100);
@@ -247,7 +249,7 @@ function renderStats() {
     document.getElementById('stat-value-trend').textContent = 'Yetkisiz alan';
   } else {
     animateCounter(document.getElementById('stat-value'), stockValueEUR, 1500, v => fmtEURShort(v));
-    const stockRevenueEUR = s?.total_sale_value ?? products.reduce((acc, p) => acc + p.stock * (p.price || 0), 0);
+    const stockRevenueEUR = s?.total_sale_value ?? products.reduce((acc, p) => acc + Math.max(0, p.stock) * (p.price || 0), 0);
     document.getElementById('stat-value-trend').textContent = `TL eşd.: ${fmtTLShort(stockValueEUR * eurRate)} · Satış: ${fmtEURShort(stockRevenueEUR)}`;
   }
 
@@ -485,8 +487,8 @@ function renderTable() {
     const status    = calcStatus(p);
     const margin    = p.price > 0 ? ((p.price - p.cost) / p.price) * 100 : 0;
     const marginCls = margin > 40 ? 'margin-good' : margin > 20 ? 'margin-mid' : 'margin-bad';
-    const stockPct  = p.minStock > 0 ? Math.min(100, (p.stock / p.minStock) * 100) : 100;
-    const barCls    = p.stock === 0 ? 'bad' : p.stock <= p.minStock ? 'mid' : 'good';
+    const stockPct  = p.stock <= 0 ? 0 : p.minStock > 0 ? Math.min(100, (p.stock / p.minStock) * 100) : 100;
+    const barCls    = p.stock <= 0 ? 'bad' : p.stock <= p.minStock ? 'mid' : 'good';
     const tr = document.createElement('tr');
     tr.className = status;
     tr.style.animationDelay = `${idx * 0.02}s`;
@@ -503,7 +505,7 @@ function renderTable() {
         <td>
           <div class="stock-cell">
             <div class="stock-row">
-              <span class="stock-num">${p.stock}</span>
+              <span class="stock-num${p.stock < 0 ? ' negative' : ''}">${p.stock}</span>
             </div>
             <div class="stock-bar"><div class="stock-bar-fill ${barCls}" style="width:${stockPct}%"></div></div>
           </div>
@@ -512,7 +514,7 @@ function renderTable() {
         <td><span class="badge ${status}">${statusLabel(status)}</span></td>
         <td>
           <div class="row-actions">
-            ${canDo('make_sales') ? `<button class="icon-btn warn" title="Stok Çıkar (Satış)" onclick="openStockOutModal(${p.id})" ${p.stock === 0 ? 'disabled' : ''}>
+            ${canDo('make_sales') ? `<button class="icon-btn warn" title="Stok Çıkar (Satış)" onclick="openStockOutModal(${p.id})" ${p.stock <= 0 ? 'disabled' : ''}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M13 18l6-6-6-6"></path></svg>
             </button>` : ''}
             ${canDo('add_products') ? `<button class="icon-btn" title="Düzenle" onclick="openEditModal(${p.id})">
@@ -572,13 +574,20 @@ function renderAlertBanner() {
   const lowCount = dashboardSummary?.low_stock_count    ?? products.filter(p => p.stock <= p.minStock).length;
   // low_stock_count artık zero-stock'u içeriyor; banner'da çift saymamak için farkı göster
   const belowMin = Math.max(0, lowCount - outCount);
-  if (outCount === 0 && belowMin === 0) { banner.style.display = 'none'; return; }
+  const negCount = dashboardSummary?.negative_stock_count ?? 0;
+  if (outCount === 0 && belowMin === 0 && negCount === 0) { banner.style.display = 'none'; return; }
 
   let html = '<span class="alert-banner-label">Stok Uyarısı:</span>';
   if (outCount > 0) {
     html += `<button class="alert-chip red" onclick="filterByStatus('out_of_stock')">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       ${outCount.toLocaleString('tr-TR')} ürün tükendi
+    </button>`;
+  }
+  if (negCount > 0) {
+    html += `<button class="alert-chip red" onclick="filterByStatus('negative')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      ${negCount.toLocaleString('tr-TR')} ürün eksi stokta
     </button>`;
   }
   if (belowMin > 0) {
@@ -1047,6 +1056,7 @@ const EXPORT_FILTER_SUFFIX = {
   active:         'aktif',
   low_stock:      'dusuk-stok',
   out_of_stock:   'tukendi',
+  negative:       'eksi-stok',
 };
 
 const dec = n => Number(n).toFixed(2).replace('.', ',');
@@ -1064,7 +1074,7 @@ const EXPORT_COLUMN_DEFS = [
   { key: 'stock',      label: 'Stok',          num: p => Number(p.stock) || 0, val: p => p.stock },
   { key: 'minStock',   label: 'Min. Stok',     num: p => Number(p.minStock) || 0, val: p => p.minStock },
   { key: 'sales7d',    label: '7g Satış',      num: p => Number(p.sales7d) || 0, val: p => p.sales7d },
-  { key: 'stockValue', label: 'Stok Değeri',   money: true, num: p => round2(p.stock * p.cost), val: p => dec(p.stock * p.cost) },
+  { key: 'stockValue', label: 'Stok Değeri',   money: true, num: p => round2(Math.max(0, p.stock) * p.cost), val: p => dec(Math.max(0, p.stock) * p.cost) },
   { key: 'status',     label: 'Durum',         val: p => statusLabel(calcStatus(p)) },
 ];
 
@@ -1174,6 +1184,7 @@ async function fetchAllProductsForExport(status, category = '') {
   while (true) {
     let q = sb.from('products').select('*').order('created_at', { ascending: false });
     if (status === 'active') q = q.or('status.eq.active,status.eq.low_stock,status.is.null');
+    else if (status === 'negative') q = q.lt('stock', 0);
     else if (status)         q = q.eq('status', status);
     if (category)            q = q.eq('category', category);
     q = q.range(from, from + CHUNK - 1);

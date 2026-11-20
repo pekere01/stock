@@ -24,7 +24,7 @@ export function fmtEURShort(n) {
 }
 
 export function calcStatus(p) {
-  if (p.stock === 0) return 'out_of_stock';
+  if (p.stock <= 0) return 'out_of_stock';
   if (p.stock <= p.minStock) return 'low_stock';
   return 'active';
 }
