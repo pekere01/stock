@@ -44,7 +44,7 @@ function renderReviewRows(items, tbodyId, isSct = false) {
   if (items.length === 0) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 6;
+    td.colSpan = 7;
     td.textContent = 'İnceleme bekleyen kayıt yok.';
     tr.appendChild(td);
     tbody.appendChild(tr);
@@ -59,6 +59,8 @@ function renderReviewRows(items, tbodyId, isSct = false) {
     tdStok.textContent = item.stok_kod;
     const tdIrsaliye = document.createElement('td');
     tdIrsaliye.textContent = item.irsaliye_no || '-';
+    const tdFirma = document.createElement('td');
+    tdFirma.textContent = item.cari_unvan || '—';
     const tdMiktar = document.createElement('td');
     tdMiktar.textContent = item.miktar;
     const tdGun = document.createElement('td');
@@ -88,7 +90,7 @@ function renderReviewRows(items, tbodyId, isSct = false) {
       btnDelete.onclick = () => window.closeReviewItem(item.mikro_sth_guid, item.stok_kod);
       tdIslem.appendChild(btnDelete);
     }
-    tr.append(tdName, tdStok, tdIrsaliye, tdMiktar, tdGun, tdIslem);
+    tr.append(tdName, tdStok, tdIrsaliye, tdFirma, tdMiktar, tdGun, tdIslem);
     fragment.appendChild(tr);
   });
   tbody.appendChild(fragment);
