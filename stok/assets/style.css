@@ -1551,6 +1551,8 @@
     -webkit-backdrop-filter: blur(var(--glass-blur));
     padding: 28px;
     overflow: hidden;
+    /* Kendi katmanı: kart uzayınca Chrome blur'u eksik boyayıp dikey şerit bırakıyordu */
+    transform: translateZ(0);
   }
   .admin-card::before {
     content: '';
